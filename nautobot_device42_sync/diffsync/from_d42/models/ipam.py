@@ -307,16 +307,11 @@ class IPAddress(DiffSyncModel):
         return super().update(attrs)
 
     def delete(self):
-        """Delete IPAddress object from Nautobot.
-
-        Because IPAddress has a direct relationship with many other objects it can't be deleted before anything else.
-        The self.diffsync._objects_to_delete dictionary stores all objects for deletion and removes them from Nautobot
-        in the correct order. This is used in the Nautobot adapter sync_complete function.
-        """
-        self.diffsync.job.log_warning(f"IP Address {self.address} will be deleted.")
+        """Delete IPAddress object from Nautobot."""
+        print(f"IP Address {self.address} will be deleted.")
+        ipaddr = NautobotIPAddress.objects.get(**self.get_identifiers())
+        ipaddr.delete()
         super().delete()
-        site = NautobotIPAddress.objects.get(**self.get_identifiers())
-        self.diffsync._objects_to_delete["ipaddr"].append(site)  # pylint: disable=protected-access
         return self
 
 
