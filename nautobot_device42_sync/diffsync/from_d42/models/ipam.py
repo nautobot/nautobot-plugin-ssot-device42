@@ -419,6 +419,10 @@ class VLAN(DiffSyncModel):
         try:
             vlan = NautobotVLAN.objects.get(vid=self.vlan_id, name=self.name, site__name=self.building)
         except NautobotSite.DoesNotExist:
-            vlan = NautobotVLAN.objects.get(vid=self.vlan_id, name=self.name)
+            vlans = NautobotVLAN.objects.filter(vid=self.vlan_id, name=self.name)
+            for _vlan in vlans:
+                if not _vlan.site:
+                    vlan = _vlan
+                    break
         self.diffsync._objects_to_delete["vlan"].append(vlan)  # pylint: disable=protected-access
         return self
