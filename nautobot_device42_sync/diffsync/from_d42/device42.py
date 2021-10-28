@@ -467,6 +467,7 @@ class Device42Adapter(DiffSync):
         """Load Device42 IP Addresses."""
         if PLUGIN_CFG.get("verbose_debug"):
             self.job.log_info("Retrieving IP Addresses from Device42.")
+        default_cfs = self._device42.get_ipaddr_default_custom_fields()
         _cfs = self._device42.get_ipaddr_custom_fields()
         for _ip in self._device42.get_ip_addrs():
             _ipaddr = f"{_ip['ip_address']}/{str(_ip['netmask'])}"
@@ -486,6 +487,8 @@ class Device42Adapter(DiffSync):
                 if _ipaddr in _cfs:
                     print(f"{_ipaddr} found in _cfs. CustomFields being added.")
                     new_ip.custom_fields = _cfs[_ipaddr]
+                else:
+                    new_ip.custom_fields = default_cfs
                 self.add(new_ip)
             except ObjectAlreadyExists as err:
                 if PLUGIN_CFG.get("verbose_debug"):
