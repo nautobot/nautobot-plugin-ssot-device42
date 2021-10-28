@@ -115,7 +115,7 @@ class Circuit(DiffSyncModel):
     origin_dev: Optional[str]
     endpoint_int: Optional[str]
     endpoint_dev: Optional[str]
-    bandwidth: Optional[str]
+    bandwidth: Optional[int]
     tags: Optional[List[str]]
 
     @staticmethod
@@ -180,7 +180,7 @@ class Circuit(DiffSyncModel):
         if attrs.get("install_date"):
             _circuit.install_date = attrs["install_date"]
         if attrs.get("bandwidth"):
-            _circuit.commit_rate = attrs["bandwidth"] / 1000
+            _circuit.commit_rate = attrs["bandwidth"]
         if attrs.get("origin_int") and attrs.get("origin_dev"):
             self.connect_circuit_to_device(
                 intf=attrs["origin_int"], dev=attrs["origin_dev"], term_side="A", circuit=_circuit
