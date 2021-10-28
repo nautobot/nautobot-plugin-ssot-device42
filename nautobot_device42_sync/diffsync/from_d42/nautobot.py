@@ -132,6 +132,9 @@ class NautobotAdapter(DiffSync):
             for _dev in Device.objects.all():
                 _devname = _dev.name.strip()
                 if not re.search(r"\s-\s\w+\s?\d+", _devname):
+                    # ignore AP device names, they appear like FQDNs but are actually a MAC addr
+                    if re.search(r"AP[A-F0-9]{4}\.[A-F0-9]{4}.[A-F0-9]{4}", _dev.name):
+                        continue
                     _devname = re.search(r"[a-zA-Z0-9\.\/\?\:\-_=#]+\.[a-zA-Z]{2,6}", _dev.name)
                     if _devname:
                         _devname = _devname.group()
