@@ -406,6 +406,27 @@ class Device42API:
             _fields[f"{_cf['ip_address']}/{_cf['mask_bits']}"].append(_field)
         return _fields
 
+    def get_all_custom_fields(self, custom_fields: List[dict]) -> List[dict]:
+        """Get all Custom Fields for object.
+
+        As Device42 only returns CustomFields with values in them when using DOQL, we need to compile a list of all Custom Fields on an object to match Nautobot method.
+
+        Args:
+            custom_fields (List[dict]): List of Custom Fields for an object.
+
+        Returns:
+            List[dict]: List of all Custom Fields nulled.
+        """
+        _cfs = []
+        for _cf in custom_fields:
+            _field = {
+                "key": _cf["key"],
+                "value": None,
+                "notes": None,
+            }
+            _cfs.append(_field)
+        return list({x["key"]: x for x in _cfs}.values())
+
     def get_vlans_with_location(self) -> List[dict]:
         """Method to get all VLANs with Building and Customer info to attach to find Site.
 
