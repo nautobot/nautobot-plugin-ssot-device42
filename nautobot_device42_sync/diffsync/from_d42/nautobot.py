@@ -495,7 +495,7 @@ class NautobotAdapter(DiffSync):
                 type=_circuit.type.name,
                 status=_circuit.status.name,
                 install_date=_circuit.install_date,
-                bandwidth=bits_to_name(_circuit.commit_rate * 1000),
+                bandwidth=_circuit.commit_rate,
                 tags=nbutils.get_tag_strings(_circuit.tags),
             )
             self.add(new_circuit)
