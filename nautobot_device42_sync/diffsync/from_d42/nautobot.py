@@ -44,7 +44,6 @@ class NautobotAdapter(DiffSync):
         "cluster": [],
         "port": [],
         "subnet": [],
-        "ipaddr": [],
         "vlan": [],
         "cable": [],
     }
@@ -108,7 +107,6 @@ class NautobotAdapter(DiffSync):
             "rack_group",
             "vrf",
             "subnet",
-            "ipaddr",
             "vlan",
             "site",
             "manufacturer",
