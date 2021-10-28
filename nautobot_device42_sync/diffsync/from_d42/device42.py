@@ -428,21 +428,7 @@ class Device42Adapter(DiffSync):
             _tags = _pf["tags"].split(",") if _pf.get("tags") else []
             if len(_tags) > 1:
                 _tags.sort()
-            # This handles Prefix with /32 netmask. These need to be added as an IPAddress.
-            if _pf["mask_bits"] == 32 and ":" not in _pf["network"]:
-                if PLUGIN_CFG.get("verbose_debug"):
-                    self.job.log_warning(f"Network {_pf['network']} with 32 netmask found. Loading as IPAddress.")
-                new_ip = self.ipaddr(
-                    address=f"{_pf['network']}/{str(_pf['mask_bits'])}",
-                    available=True,
-                    label=_pf["name"],
-                    vrf=_pf["vrf"],
-                    tags=_tags,
-                )
-                if new_ip.address in _cfs:
-                    new_ip.custom_fields = _cfs[new_ip.address]
-                self.add(new_ip)
-            elif _pf["mask_bits"] != 0:
+            if _pf["mask_bits"] != 0:
                 try:
                     new_pf = self.subnet(
                         network=_pf["network"],
