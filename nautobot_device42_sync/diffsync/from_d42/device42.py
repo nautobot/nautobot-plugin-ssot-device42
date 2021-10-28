@@ -469,12 +469,13 @@ class Device42Adapter(DiffSync):
             self.job.log_info("Retrieving IP Addresses from Device42.")
         _cfs = self._device42.get_ipaddr_custom_fields()
         for _ip in self._device42.get_ip_addrs():
+            _ipaddr = f"{_ip['ip_address']}/{str(_ip['netmask'])}"
             try:
                 _tags = _ip["tags"].split(",") if _ip.get("tags") else []
                 if len(_tags) > 1:
                     _tags.sort()
                 new_ip = self.ipaddr(
-                    address=f"{_ip['ip_address']}/{str(_ip['netmask'])}",
+                    address=_ipaddr,
                     available=_ip["available"],
                     label=_ip["label"],
                     device=_ip["device"] if _ip.get("device") else "",
@@ -482,12 +483,13 @@ class Device42Adapter(DiffSync):
                     vrf=_ip["vrf"],
                     tags=_tags,
                 )
-                if new_ip.address in _cfs:
-                    new_ip.custom_fields = _cfs[new_ip.address]
+                if _ipaddr in _cfs:
+                    print(f"{_ipaddr} found in _cfs. CustomFields being added.")
+                    new_ip.custom_fields = _cfs[_ipaddr]
                 self.add(new_ip)
             except ObjectAlreadyExists as err:
                 if PLUGIN_CFG.get("verbose_debug"):
-                    self.job.log_warning(f"IP Address {_ip['ip_address']} {_ip['netmask']} already exists.{err}")
+                    self.job.log_warning(f"IP Address {_ipaddr} already exists.{err}")
                 continue
 
     def load_vlans(self):
