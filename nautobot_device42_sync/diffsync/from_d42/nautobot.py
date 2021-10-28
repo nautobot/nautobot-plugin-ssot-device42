@@ -477,7 +477,7 @@ class NautobotAdapter(DiffSync):
             if "interface" in str(_cable.termination_a_type):
                 src_port = Interface.objects.get(id=_cable.termination_a_id)
                 if src_port.mac_address:
-                    mac_addr = str(src_port.mac_address).strip(":").lower()
+                    mac_addr = str(src_port.mac_address).replace(":", "").lower()
                 else:
                     mac_addr = None
                 new_conn.src_port = src_port.name
@@ -490,7 +490,7 @@ class NautobotAdapter(DiffSync):
             if "interface" in str(_cable.termination_b_type):
                 dst_port = Interface.objects.get(id=_cable.termination_b_id)
                 if dst_port.mac_address:
-                    mac_addr = str(dst_port.mac_address).strip(":").lower()
+                    mac_addr = str(dst_port.mac_address).replace(":", "").lower()
                 else:
                     mac_addr = None
                 new_conn.dst_port = dst_port.name
