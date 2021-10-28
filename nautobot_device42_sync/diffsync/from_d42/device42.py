@@ -537,9 +537,11 @@ class Device42Adapter(DiffSync):
                     src_device=self.device_map[_conn["src_device"]]["name"],
                     src_port=self.port_map[_conn["src_port"]]["port"],
                     src_port_mac=self.port_map[_conn["src_port"]]["hwaddress"],
+                    src_type="interface",
                     dst_device=self.device_map[_conn["dst_device"]]["name"],
                     dst_port=self.port_map[_conn["dst_port"]]["port"],
                     dst_port_mac=self.port_map[_conn["dst_port"]]["hwaddress"],
+                    dst_type="interface",
                 )
                 self.add(new_conn)
             except ObjectAlreadyExists as err:
@@ -569,12 +571,15 @@ class Device42Adapter(DiffSync):
         _circuits = self._device42.get_telcocircuits()
         for _tc in _circuits:
             self.load_provider(_tc)
+            src_type, dst_type = "circuit", "circuit"
             if _tc["origin_type"] == "Device Port":
                 origin_int = self.port_map[_tc["origin_netport_fk"]]["port"]
                 origin_dev = self.port_map[_tc["origin_netport_fk"]]["device"]
+                src_type = "interface"
             if _tc["end_point_type"] == "Device Port":
                 endpoint_int = self.port_map[_tc["end_point_netport_fk"]]["port"]
                 endpoint_dev = self.port_map[_tc["end_point_netport_fk"]]["device"]
+                dst_type = "interface"
             new_circuit = self.circuit(
                 circuit_id=_tc["circuit_id"],
                 provider=self.vendor_map[_tc["vendor_fk"]]["name"],

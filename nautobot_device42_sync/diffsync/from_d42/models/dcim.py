@@ -917,14 +917,16 @@ class Connection(DiffSyncModel):
 
     _modelname = "conn"
     _identifiers = ("src_device", "src_port", "src_port_mac", "dst_device", "dst_port", "dst_port_mac")
-    _attributes = ()
+    _attributes = ("src_type", "dst_type")
     _children = {}
 
     src_device: str
     src_port: str
+    src_type: str
     src_port_mac: Optional[str]
     dst_device: str
     dst_port: str
+    dst_type: str
     dst_port_mac: Optional[str]
     tags: Optional[List[str]]
 
