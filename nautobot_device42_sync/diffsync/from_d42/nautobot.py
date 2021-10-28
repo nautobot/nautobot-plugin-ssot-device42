@@ -27,7 +27,7 @@ from nautobot_device42_sync.diffsync.from_d42.models import ipam
 from nautobot_device42_sync.diffsync.from_d42.models import circuits
 from nautobot_device42_sync.constant import USE_DNS, PLUGIN_CFG
 from nautobot_device42_sync.diffsync import nbutils
-from netutils.bandwidth import kbits_to_name
+from netutils.bandwidth import bits_to_name
 
 
 class NautobotAdapter(DiffSync):
@@ -526,7 +526,7 @@ class NautobotAdapter(DiffSync):
                 type=_circuit.type.name,
                 status=_circuit.status.name,
                 install_date=_circuit.install_date,
-                bandwidth=kbits_to_name(_circuit.commit_rate),
+                bandwidth=bits_to_name(_circuit.commit_rate*1000),
                 tags=nbutils.get_tag_strings(_circuit.tags),
             )
             self.add(new_circuit)

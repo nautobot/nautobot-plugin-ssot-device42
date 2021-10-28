@@ -14,7 +14,7 @@ from nautobot.extras.models import Status as NautobotStatus
 from nautobot_device42_sync.constant import INTF_SPEED_MAP
 from nautobot_device42_sync.diffsync import nbutils
 from nautobot_device42_sync.diffsync import d42utils
-from netutils.bandwidth import name_to_kbits
+from netutils.bandwidth import name_to_bits
 
 
 class Provider(DiffSyncModel):
@@ -152,7 +152,7 @@ class Circuit(DiffSyncModel):
                 type=d42utils.verify_circuit_type(attrs["type"]),
                 status=NautobotStatus.objects.get(name=cls.get_circuit_status(attrs["status"])),
                 install_date=attrs["install_date"] if attrs.get("install_date") else None,
-                commit_rate=name_to_kbits(attrs["bandwidth"]) if attrs.get("bandwidth") else None,
+                commit_rate=(name_to_bits(attrs["bandwidth"]) / 1000) if attrs.get("bandwidth") else None,
                 comments=attrs["notes"] if attrs.get("notes") else "",
             )
             if attrs.get("tags"):
@@ -181,7 +181,7 @@ class Circuit(DiffSyncModel):
         if attrs.get("install_date"):
             _circuit.install_date = attrs["install_date"]
         if attrs.get("bandwidth"):
-            _circuit.commit_rate = name_to_kbits(attrs["bandwidth"])
+            _circuit.commit_rate = name_to_bits(attrs["bandwidth"]) / 1000
         if attrs.get("origin_int") and attrs.get("origin_dev"):
             self.connect_circuit_to_device(
                 intf=attrs["origin_int"], dev=attrs["origin_dev"], term_side="A", circuit=_circuit
