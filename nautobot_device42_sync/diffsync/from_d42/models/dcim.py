@@ -7,6 +7,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils.text import slugify
 from diffsync import DiffSyncModel
 from nautobot.core.settings_funcs import is_truthy
+from nautobot.circuits.models import Circuit as NautobotCircuit
+from nautobot.circuits.models import CircuitTermination as NautobotCT
 from nautobot.extras.models import Status as NautobotStatus
 from nautobot.dcim.models import Site as NautobotSite
 from nautobot.dcim.models.racks import RackGroup as NautobotRackGroup
@@ -22,7 +24,7 @@ from nautobot.extras.models import CustomField
 from nautobot.ipam.models import VLAN as NautobotVLAN
 from nautobot_device42_sync.diffsync import nbutils
 from nautobot_device42_sync.diffsync import d42utils
-from nautobot_device42_sync.constant import DEFAULTS, PLUGIN_CFG
+from nautobot_device42_sync.constant import DEFAULTS, PLUGIN_CFG, INTF_SPEED_MAP
 
 
 class Building(DiffSyncModel):
@@ -933,6 +935,94 @@ class Connection(DiffSyncModel):
     @classmethod
     def create(cls, diffsync, ids, attrs):  # pylint: disable=inconsistent-return-statements
         """Create Cable object in Nautobot."""
+        # Handle Circuit Terminations
+        if attrs["src_type"] == "circuit" or attrs["dst_type"] == "circuit":
+            new_cable = cls.get_circuit_connections(cls, diffsync=diffsync, ids=ids, attrs=attrs)
+        elif attrs["src_type"] == "interface" and attrs["dst_type"] == "interface":
+            new_cable = cls.get_device_connections(cls, diffsync=diffsync, ids=ids)
+        if new_cable:
+            new_cable.validated_save()
+        return super().create(diffsync=diffsync, ids=ids, attrs=attrs)
+
+    def get_circuit_connections(self, diffsync, ids, attrs) -> Optional[NautobotCable]:
+        """Method to create a Cable between a Circuit and a Device.
+
+        Args:
+            diffsync (obj): DiffSync job used for logging.
+            ids (dict): Identifying attributes for the object.
+            attrs (dict): Non-identifying attributes for the object.
+
+        Returns:
+            Optional[NautobotCable]: If the Interfaces are found and a cable is created, returns Cable else None.
+        """
+        _intf = None
+        if attrs["src_type"] == "interface":
+            try:
+                _intf = NautobotInterface.objects.get(
+                    device__name=self.get_dev_name(ids["src_device"]), name=ids["src_port"]
+                )
+                circuit = NautobotCircuit.objects.get(cid=ids["dst_device"])
+            except NautobotInterface.DoesNotExist as err:
+                if PLUGIN_CFG.get("verbose_debug"):
+                    print(
+                        f"Unable to find source port for {ids['src_device']}: {ids['src_port']} to connect to Circuit {ids['dst_device']} {err}"
+                    )
+                return None
+            except NautobotCircuit.DoesNotExist as err:
+                if PLUGIN_CFG.get("verbose_debug"):
+                    print(f"Unable to find Circuit {ids['dst_device']} {err}")
+                return None
+        if attrs["dst_type"] == "interface":
+            try:
+                circuit = NautobotCircuit.objects.get(cid=ids["src_device"])
+                _intf = NautobotInterface.objects.get(
+                    device__name=self.get_dev_name(ids["dst_device"]), name=ids["dst_port"]
+                )
+            except NautobotInterface.DoesNotExist as err:
+                if PLUGIN_CFG.get("verbose_debug"):
+                    print(
+                        f"Unable to find destination port for {ids['dst_device']}: {ids['dst_port']} to connect to Circuit {ids['src_device']} {err}"
+                    )
+                return None
+            except NautobotCircuit.DoesNotExist as err:
+                if PLUGIN_CFG.get("verbose_debug"):
+                    print(f"Unable to find Circuit {ids['dst_device']} {err}")
+                return None
+        _ct = {
+            "circuit": circuit,
+            "site": _intf.device.site,
+        }
+        if attrs["src_type"] == "interface":
+            _ct["term_side"] = "A"
+        if attrs["dst_type"] == "interface":
+            _ct["term_side"] = "Z"
+        try:
+            circuit_term = NautobotCT.objects.get(**_ct)
+        except NautobotCT.DoesNotExist:
+            circuit_term = NautobotCT(**_ct)
+            circuit_term.port_speed = INTF_SPEED_MAP[_intf.type]
+            circuit_term.validated_save()
+        if _intf and not _intf.cable and not circuit_term.cable:
+            new_cable = NautobotCable(
+                termination_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
+                termination_a_id=_intf.id,
+                termination_b_type=ContentType.objects.get(app_label="circuits", model="circuittermination"),
+                termination_b_id=circuit_term.id,
+                status=NautobotStatus.objects.get(name="Connected"),
+                color=nbutils.get_random_color(),
+            )
+            new_cable.validated_save()
+
+    def get_device_connections(self, diffsync, ids) -> Optional[NautobotCable]:
+        """Method to create a Cable between two Devices.
+
+        Args:
+            diffsync (obj): DiffSync job used for logging.
+            ids (dict): Identifying attributes for the object.
+
+        Returns:
+            Optional[NautobotCable]: If the Interfaces are found and a cable is created, returns Cable else None.
+        """
         _src_port, _dst_port = None, None
         try:
             if ids.get("src_port_mac"):
@@ -940,7 +1030,7 @@ class Connection(DiffSyncModel):
         except NautobotInterface.DoesNotExist:
             try:
                 _src_port = NautobotInterface.objects.get(
-                    device__name=cls.get_dev_name(ids["src_device"]), name=ids["src_port"]
+                    device__name=self.get_dev_name(ids["src_device"]), name=ids["src_port"]
                 )
             except NautobotInterface.DoesNotExist as err:
                 if PLUGIN_CFG.get("verbose_debug"):
@@ -954,7 +1044,7 @@ class Connection(DiffSyncModel):
         except NautobotInterface.DoesNotExist:
             try:
                 _dst_port = NautobotInterface.objects.get(
-                    device__name=cls.get_dev_name(ids["dst_device"]), name=ids["dst_port"]
+                    device__name=self.get_dev_name(ids["dst_device"]), name=ids["dst_port"]
                 )
             except NautobotInterface.DoesNotExist:
                 if PLUGIN_CFG.get("verbose_debug"):
@@ -971,9 +1061,10 @@ class Connection(DiffSyncModel):
                 status=NautobotStatus.objects.get(name="Connected"),
                 color=nbutils.get_random_color(),
             )
-            new_cable.validated_save()
-            return super().create(diffsync=diffsync, ids=ids, attrs=attrs)
+            return new_cable
+        return None
 
+    @staticmethod
     def get_dev_name(dev_name: str):
         """Strips cluster member names to get cluster master name.
 
@@ -992,44 +1083,52 @@ class Connection(DiffSyncModel):
         return _dev
 
     def delete(self):
-        """Delete Cable object from Nautobot.
-
-        Because Interface has a direct relationship with Cables and IP Addresses it can't be deleted before they are.
-        The self.diffsync._objects_to_delete dictionary stores all objects for deletion and removes them from Nautobot
-        in the correct order. This is used in the Nautobot adapter sync_complete function.
-        """
+        """Delete Cable object from Nautobot."""
+        print(f"Deleting {self.get_identifiers()}")
         if PLUGIN_CFG.get("verbose_debug"):
-            self.job.log_warning(f"Cable between {self.src_device} and {self.dst_device} will be deleted.")
-        super().delete()
+            print(f"Cable between {self.src_device} and {self.dst_device} will be deleted.")
         try:
-            _term_a = NautobotInterface.objects.get(mac_address=self.src_port_mac)
-        except NautobotInterface.DoesNotExist:
-            try:
-                _term_a = NautobotInterface.objects.get(name=self.src_port, device__name=self.src_device)
-            except NautobotInterface.DoesNotExist as err:
-                if PLUGIN_CFG.get("verbose_debug"):
-                    self.job.log_warning(
-                        f"Unable to find source port. {self.src_port} {self.src_port_mac} {self.src_device} {err}"
-                    )
-                return None
+            if self.src_port_mac != None:
+                _term_a = NautobotInterface.objects.get(mac_address=self.src_port_mac)
+            else:
+                # Circuit Terminations should have identical port and device, the CircuitID
+                if self.src_port == self.src_device:
+                    _term_a = NautobotCT.objects.get(cid=self.src_device, term_side="A")
+                else:
+                    _term_a = NautobotInterface.objects.get(name=self.src_port, device__name=self.src_device)
+        except NautobotInterface.DoesNotExist as err:
+            if PLUGIN_CFG.get("verbose_debug"):
+                print(f"Unable to find source port. {self.src_port} {self.src_port_mac} {self.src_device} {err}")
+            return None
+        except NautobotCT.DoesNotExist as err:
+            if PLUGIN_CFG.get("verbose_debug"):
+                print(f"Unable to find Circuit ID. {self.src_device} {self.src_port} {err}")
+            return None
         try:
-            _term_b = NautobotInterface.objects.get(mac_address=self.dst_port_mac)
-        except NautobotInterface.DoesNotExist:
-            try:
-                _term_b = NautobotInterface.objects.get(name=self.dst_port, device__name=self.dst_device)
-            except NautobotInterface.DoesNotExist as err:
-                if PLUGIN_CFG.get("verbose_debug"):
-                    self.job.log_warning(
-                        f"Unable to find destination port. {self.dst_port} {self.dst_port_mac}  {self.dst_device} {err}"
-                    )
-                return None
+            if self.dst_port_mac != None:
+                _term_b = NautobotInterface.objects.get(mac_address=self.dst_port_mac)
+            else:
+                # Circuit Terminations should have identical port and device, the CircuitID
+                if self.src_port == self.src_device:
+                    _term_b = NautobotCT.objects.get(cid=self.dst_device, term_side="Z")
+                else:
+                    _term_b = NautobotInterface.objects.get(name=self.dst_port, device__name=self.dst_device)
+        except NautobotInterface.DoesNotExist as err:
+            if PLUGIN_CFG.get("verbose_debug"):
+                print(f"Unable to find destination port. {self.dst_port} {self.dst_port_mac}  {self.dst_device} {err}")
+            return None
+        except NautobotCT.DoesNotExist as err:
+            if PLUGIN_CFG.get("verbose_debug"):
+                print(f"Unable to find Circuit ID. {self.dst_device} {self.dst_port} {err}")
+            return None
         _conn = NautobotCable.objects.get(
             termination_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
             termination_a_id=_term_a.id,
             termination_b_type=ContentType.objects.get(app_label="dcim", model="interface"),
             termination_b_id=_term_b.id,
         )
-        self.diffsync._objects_to_delete["cable"].append(_conn)  # pylint: disable=protected-access
+        _conn.delete()
+        super().delete()
         return self
 
 

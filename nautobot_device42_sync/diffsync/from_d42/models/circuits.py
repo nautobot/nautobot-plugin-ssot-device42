@@ -155,6 +155,10 @@ class Circuit(DiffSyncModel):
                 commit_rate=name_to_kbits(attrs["bandwidth"]) if attrs.get("bandwidth") else None,
                 comments=attrs["notes"] if attrs.get("notes") else "",
             )
+            if attrs.get("tags"):
+                for _tag in nbutils.get_tags(attrs["tags"]):
+                    _circuit.tags.add(_tag)
+            _circuit.validated_save()
             if attrs.get("origin_int") and attrs.get("origin_dev"):
                 cls.connect_circuit_to_device(
                     intf=attrs["origin_int"], dev=attrs["origin_dev"], term_side="A", circuit=_circuit
@@ -163,10 +167,6 @@ class Circuit(DiffSyncModel):
                 cls.connect_circuit_to_device(
                     intf=attrs["endpoint_int"], dev=attrs["endpoint_dev"], term_side="Z", circuit=_circuit
                 )
-            if attrs.get("tags"):
-                for _tag in nbutils.get_tags(attrs["tags"]):
-                    _circuit.tags.add(_tag)
-            _circuit.validated_save()
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -193,30 +193,34 @@ class Circuit(DiffSyncModel):
         _circuit.validated_save()
         return super().update(attrs)
 
-    def connect_circuit_to_device(self, intf: str, dev: str, term_side: str, circuit: NautobotCircuit):
+    @staticmethod
+    def connect_circuit_to_device(intf: str, dev: str, term_side: str, circuit: NautobotCircuit):
         """Method to handle Circuit Termination to a Device.
 
         Args:
             intf (str): Interface of Device to connect Circuit Termination.
-            dev (str): [description]
-            term_side (str): [description]
-            circuit (NautobotCircuit): [description]
+            dev (str): Device with respective interface to connect Circuit to.
+            term_side (str): Which side of the CircuitTermination this connection is on, A or Z.
+            circuit (NautobotCircuit): The actual Circuit object that the CircuitTermination is connecting to.
         """
         try:
             _intf = NautobotInterface.objects.get(name=intf, device=NautobotDevice.objects.get(name=dev))
-            origin_term = NautobotCT(
-                circuit=circuit,
-                term_side=term_side,
-                site=_intf.device.site,
-                port_speed=INTF_SPEED_MAP[_intf.type],
-            )
-            origin_term.validated_save()
-            if _intf and not _intf.cable and not origin_term.cable:
+            try:
+                _term = NautobotCT.objects.get(circuit=circuit, term_side=term_side)
+            except NautobotCT.DoesNotExist:
+                _term = NautobotCT(
+                    circuit=circuit,
+                    term_side=term_side,
+                    site=_intf.device.site,
+                    port_speed=INTF_SPEED_MAP[_intf.type],
+                )
+                _term.validated_save()
+            if _intf and not _intf.cable and not _term.cable:
                 new_cable = NautobotCable(
                     termination_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
                     termination_a_id=_intf.id,
                     termination_b_type=ContentType.objects.get(app_label="circuits", model="circuittermination"),
-                    termination_b_id=origin_term.id,
+                    termination_b_id=_term.id,
                     status=NautobotStatus.objects.get(name="Connected"),
                     color=nbutils.get_random_color(),
                 )

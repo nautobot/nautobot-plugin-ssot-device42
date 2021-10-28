@@ -45,10 +45,10 @@ class Device42Adapter(DiffSync):
         "vlan",
         "cluster",
         "device",
-        "conn",
         "ipaddr",
         "provider",
         "circuit",
+        "conn",
     ]
 
     def __init__(self, *args, job=None, sync=None, **kwargs):
@@ -595,6 +595,26 @@ class Device42Adapter(DiffSync):
                 tags=_tc["tags"].split(",") if _tc.get("tags") else [],
             )
             self.add(new_circuit)
+            # Add Connection from A size connection Device to Circuit
+            a_side_conn = self.conn(
+                src_device=origin_dev,
+                src_port=origin_int,
+                src_type=src_type,
+                dst_device=_tc["circuit_id"],
+                dst_port=_tc["circuit_id"],
+                dst_type="circuit",
+            )
+            self.add(a_side_conn)
+            # Add Connection from Z size connection Circuit to Device
+            z_side_conn = self.conn(
+                src_device=_tc["circuit_id"],
+                src_port=_tc["circuit_id"],
+                src_type="circuit",
+                dst_device=endpoint_dev,
+                dst_port=endpoint_int,
+                dst_type=dst_type,
+            )
+            self.add(z_side_conn)
 
     def load(self):
         """Load data from Device42."""

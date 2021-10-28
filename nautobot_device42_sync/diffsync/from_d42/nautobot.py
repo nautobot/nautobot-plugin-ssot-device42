@@ -8,7 +8,7 @@ from django.db.models import ProtectedError
 from diffsync import DiffSync
 from diffsync.exceptions import ObjectAlreadyExists
 from nautobot.core.settings_funcs import is_truthy
-from nautobot.circuits.models import Provider, Circuit
+from nautobot.circuits.models import Provider, Circuit, CircuitTermination
 from nautobot.dcim.models import (
     Site,
     RackGroup,
@@ -74,10 +74,10 @@ class NautobotAdapter(DiffSync):
         "vlan",
         "cluster",
         "device",
-        "conn",
         "ipaddr",
         "provider",
         "circuit",
+        "conn",
     ]
 
     def __init__(self, *args, job=None, sync=None, **kwargs):
@@ -450,17 +450,41 @@ class NautobotAdapter(DiffSync):
     def load_cables(self):
         """Add Nautobot Cable objects as DiffSync Connection models."""
         for _cable in Cable.objects.all():
-            src_port = Interface.objects.get(id=_cable.termination_a_id)
-            dst_port = Interface.objects.get(id=_cable.termination_b_id)
             new_conn = self.conn(
-                src_device=src_port.device.name,
-                src_port=src_port.name,
-                src_port_mac=str(src_port.mac_address).strip(":").lower(),
-                dst_device=dst_port.device.name,
-                dst_port=dst_port.name,
-                dst_port_mac=str(dst_port.mac_address).strip(":").lower(),
+                src_device="",
+                src_port="",
+                src_type="interface",
+                dst_device="",
+                dst_port="",
+                dst_type="interface",
                 tags=nbutils.get_tag_strings(_cable.tags),
             )
+            if "interface" in str(_cable.termination_a_type):
+                src_port = Interface.objects.get(id=_cable.termination_a_id)
+                if src_port.mac_address:
+                    mac_addr = str(src_port.mac_address).strip(":").lower()
+                else:
+                    mac_addr = None
+                new_conn.src_port = src_port.name
+                new_conn.src_device = src_port.device.name
+                new_conn.src_port_mac = mac_addr
+            elif "circuit" in str(_cable.termination_a_type):
+                new_conn.src_type = "circuit"
+                new_conn.src_port = CircuitTermination.objects.get(id=_cable.termination_a_id).circuit.cid
+                new_conn.src_device = CircuitTermination.objects.get(id=_cable.termination_a_id).circuit.cid
+            if "interface" in str(_cable.termination_b_type):
+                dst_port = Interface.objects.get(id=_cable.termination_b_id)
+                if dst_port.mac_address:
+                    mac_addr = str(dst_port.mac_address).strip(":").lower()
+                else:
+                    mac_addr = None
+                new_conn.dst_port = dst_port.name
+                new_conn.dst_device = dst_port.device.name
+                new_conn.dst_port_mac = mac_addr
+            elif "circuit" in str(_cable.termination_b_type):
+                new_conn.dst_type = "circuit"
+                new_conn.dst_port = CircuitTermination.objects.get(id=_cable.termination_b_id).circuit.cid
+                new_conn.dst_device = CircuitTermination.objects.get(id=_cable.termination_b_id).circuit.cid
             self.add(new_conn)
 
     def load_providers(self):
