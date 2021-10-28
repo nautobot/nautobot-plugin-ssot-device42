@@ -1088,7 +1088,7 @@ class Connection(DiffSyncModel):
         if PLUGIN_CFG.get("verbose_debug"):
             print(f"Cable between {self.src_device} and {self.dst_device} will be deleted.")
         try:
-            if self.src_port_mac != None:
+            if self.src_port_mac is not None:
                 _term_a = NautobotInterface.objects.get(mac_address=self.src_port_mac)
             else:
                 # Circuit Terminations should have identical port and device, the CircuitID
@@ -1105,7 +1105,7 @@ class Connection(DiffSyncModel):
                 print(f"Unable to find Circuit ID. {self.src_device} {self.src_port} {err}")
             return None
         try:
-            if self.dst_port_mac != None:
+            if self.dst_port_mac is not None:
                 _term_b = NautobotInterface.objects.get(mac_address=self.dst_port_mac)
             else:
                 # Circuit Terminations should have identical port and device, the CircuitID
