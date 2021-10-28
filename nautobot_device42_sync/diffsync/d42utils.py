@@ -394,9 +394,13 @@ class Device42API:
         """
         query = "SELECT cf.key, cf.value, cf.notes, i.ip_address, s.mask_bits FROM view_ipaddress_custom_fields_v1 cf LEFT JOIN view_ipaddress_v1 i ON i.ipaddress_pk = cf.ipaddress_fk LEFT JOIN view_subnet_v1 s ON s.subnet_pk = i.subnet_fk"
         results = self.doql_query(query=query)
+
+        ipaddr_cfs = self.get_all_custom_fields(results)
+
         _fields = {}
         for _cf in results:
-            _fields[f"{_cf['ip_address']}/{_cf['mask_bits']}"] = []
+            _fields[f"{_cf['ip_address']}/{_cf['mask_bits']}"] = ipaddr_cfs
+
         for _cf in results:
             _field = {
                 "key": _cf["key"],
@@ -404,6 +408,9 @@ class Device42API:
                 "notes": _cf["notes"],
             }
             _fields[f"{_cf['ip_address']}/{_cf['mask_bits']}"].append(_field)
+
+        for _ip, _item in _fields.items():
+            _fields[_ip] = list({x["key"]: x for x in _item}.values())
         return _fields
 
     def get_all_custom_fields(self, custom_fields: List[dict]) -> List[dict]:
