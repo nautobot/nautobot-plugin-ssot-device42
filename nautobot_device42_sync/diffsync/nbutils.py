@@ -2,7 +2,7 @@
 from django.utils.text import slugify
 from faker import Factory
 from taggit.managers import TaggableManager
-from typing import List
+from typing import List, OrderedDict
 from nautobot.dcim.models import DeviceRole, Manufacturer, Platform, Device, Interface
 from nautobot.extras.models import Tag
 from nautobot.ipam.models import IPAddress
@@ -199,3 +199,23 @@ def get_tag_strings(list_tags: TaggableManager) -> List[str]:
     if len(_strings) > 1:
         _strings.sort()
     return _strings
+
+
+def get_custom_field_dicts(cfields: OrderedDict) -> List[dict]:
+    """Creates list of CustomField dicts with CF key, value, and description.
+
+    Args:
+        cfields (OrderedDict): List of CustomFields with their value.
+
+    Returns:
+        cf_list (List[dict]): Return a list of CustomField dicts with key, value, and note (description).
+    """
+    cf_list = []
+    for _cf, _cf_value in cfields.items():
+        custom_field = {
+            "key": _cf.label,
+            "value": _cf_value,
+            "notes": _cf.description if _cf.description != "" else None,
+        }
+        cf_list.append(custom_field)
+    return cf_list
