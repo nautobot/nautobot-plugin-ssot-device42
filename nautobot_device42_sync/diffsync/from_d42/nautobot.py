@@ -169,29 +169,42 @@ class NautobotAdapter(DiffSync):
                                 f"{_dev.name} missing primary IP / or it doesn't match DNS response. Updating primary IP to {_ans}."
                             )
                         _ip = IPAddress.objects.get(host=_ans)
-                        if _ip:
+                        if _ip and _ip.assigned_object and (_ip.assigned_object.device == _dev):
                             nbutils.assign_primary(dev=_dev, ipaddr=_ip)
+                            continue
                     except IPAddress.DoesNotExist as err:
                         if PLUGIN_CFG.get("verbose_debug"):
-                            self.job.log_warning(f"Unable to find IP Address {_ans}. {err}")
-                        _intf = nbutils.get_or_create_mgmt_intf(intf_name="Management", dev=_dev)
-                        _intf.validated_save()
-                        _pf = Prefix.objects.net_contains(f"{_ans}/32")
-                        # the last Prefix is the most specific and is assumed the one the IP address resides in
-                        _range = _pf[len(_pf) - 1]
-                        if _range:
-                            _ip = IPAddress(
-                                address=f"{_ans}/{_range.prefix_length}",
-                                vrf=_range.vrf,
-                                status=Status.objects.get(name="Active"),
-                                description="Management address via DNS",
-                            )
-                            _ip.assigned_object_type = ContentType.objects.get(app_label="dcim", model="interface")
-                            _ip.assigned_object_id = _intf.id
-                            _ip.validated_save()
-                        nbutils.assign_primary(_dev, _ip)
+                            print(f"Unable to find IP Address {_ans}. {err}")
+                    self.create_mgmt_assign_primary(_dev, _ans)
+                    continue
                 else:
-                    print(f"Skipping {_devname} due to invalid Device name.")
+                    self.job.log_warning(f"Skipping {_devname} due to invalid Device name.")
+
+    def create_mgmt_assign_primary(self, dev: Device, ans: str):
+        """Method to create a Management Interface if one isn't found and assign the DNS resolved IP as primary to it.
+
+        Args:
+            dev (Device): Device to assign the
+            ans (str): IP address from DNS query to assign as primary IP.
+        """
+        _intf = nbutils.get_or_create_mgmt_intf(intf_name="Management", dev=dev)
+        try:
+            _ip = IPAddress.objects.get(host=ans)
+        except IPAddress.DoesNotExist:
+            _pf = Prefix.objects.net_contains(f"{ans}/32")
+            # the last Prefix is the most specific and is assumed the one the IP address resides in
+            _range = _pf[len(_pf) - 1]
+            if _range:
+                _ip = IPAddress(
+                    address=f"{ans}/{_range.prefix_length}",
+                    vrf=_range.vrf,
+                    status=Status.objects.get(name="Active"),
+                    description="Management address via DNS",
+                )
+        _ip.assigned_object_type = ContentType.objects.get(app_label="dcim", model="interface")
+        _ip.assigned_object_id = _intf.id
+        _ip.validated_save()
+        nbutils.assign_primary(dev, _ip)
 
     def load_sites(self):
         """Add Nautobot Site objects as DiffSync Building models."""
