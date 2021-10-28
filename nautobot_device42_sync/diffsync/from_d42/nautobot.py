@@ -147,7 +147,7 @@ class NautobotAdapter(DiffSync):
                         _ans = answ[0].to_text()
                     except dns.resolver.NXDOMAIN as err:
                         if PLUGIN_CFG.get("verbose_debug"):
-                            self.job.log_warning(err)
+                            self.job.log_warning(f"Non-existent domain {_devname} {err}")
                         continue
                     except dns.resolver.NoAnswer as err:
                         if PLUGIN_CFG.get("verbose_debug"):
@@ -432,7 +432,8 @@ class NautobotAdapter(DiffSync):
     def load_vlans(self):
         """Add Nautobot VLAN objects as DiffSync VLAN models."""
         for vlan in VLAN.objects.all():
-            self.job.log_debug(f"Loading VLAN: {vlan.name}.")
+            if PLUGIN_CFG.get("verbose_debug"):
+                self.job.log_debug(f"Loading VLAN: {vlan.name}.")
             try:
                 _vlan = self.vlan(
                     name=vlan.name,
