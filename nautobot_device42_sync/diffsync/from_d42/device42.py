@@ -10,6 +10,7 @@ from nautobot_device42_sync.diffsync.from_d42.models import ipam
 from nautobot_device42_sync.diffsync.from_d42.models import circuits
 from nautobot_device42_sync.diffsync.d42utils import Device42API, get_intf_type, get_netmiko_platform, get_facility
 from nautobot_device42_sync.constant import PLUGIN_CFG
+from netutils.bandwidth import name_to_bits
 
 
 def sanitize_string(san_str: str):
@@ -591,7 +592,7 @@ class Device42Adapter(DiffSync):
                 origin_dev=origin_dev,
                 endpoint_int=endpoint_int,
                 endpoint_dev=endpoint_dev,
-                bandwidth=f"{_tc['bandwidth']}{_tc['unit']}",
+                bandwidth=name_to_bits(f"{_tc['bandwidth']}{_tc['unit']}") / 1000,
                 tags=_tc["tags"].split(",") if _tc.get("tags") else [],
             )
             self.add(new_circuit)
