@@ -592,7 +592,7 @@ class Device42Adapter(DiffSync):
                 origin_dev=origin_dev,
                 endpoint_int=endpoint_int,
                 endpoint_dev=endpoint_dev,
-                bandwidth=name_to_bits(f"{_tc['bandwidth']}{_tc['unit']}") / 1000,
+                bandwidth=name_to_bits(f"{_tc['bandwidth']}{_tc['unit'].capitalize()}") / 1000,
                 tags=_tc["tags"].split(",") if _tc.get("tags") else [],
             )
             self.add(new_circuit)
