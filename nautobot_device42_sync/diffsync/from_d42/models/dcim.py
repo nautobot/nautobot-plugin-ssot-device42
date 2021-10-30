@@ -1,7 +1,7 @@
 """DiffSyncModel DCIM subclasses for Nautobot Device42 data sync."""
 
 import re
-from typing import Optional, List
+from typing import Optional, List, Union
 from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from django.utils.text import slugify
@@ -1121,15 +1121,94 @@ class Connection(DiffSyncModel):
             if PLUGIN_CFG.get("verbose_debug"):
                 print(f"Unable to find Circuit ID. {self.dst_device} {self.dst_port} {err}")
             return None
-        _conn = NautobotCable.objects.get(
-            termination_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
-            termination_a_id=_term_a.id,
-            termination_b_type=ContentType.objects.get(app_label="dcim", model="interface"),
-            termination_b_id=_term_b.id,
-        )
-        _conn.delete()
-        super().delete()
+        if self.src_device == self.src_port:
+            _conn = self.find_cable_to_circuitterm(term_a=_term_a, term_b=_term_b)
+        elif self.dst_device == self.dst_port:
+            _conn = self.find_cable_to_circuitterm(term_a=_term_a, term_b=_term_b)
+        else:
+            try:
+                _conn = self.find_cable_to_interface(term_a=_term_a, term_b=_term_b)
+            except NautobotCable.DoesNotExist:
+                _conn = self.find_cable_to_interface(term_a=_term_b, term_b=_term_a)
+        if _conn:
+            _conn.delete()
+            super().delete()
         return self
+
+    def find_cable_to_circuitterm(self, term_a, term_b):
+        """Method to find a Cable between an interface and a Circuit Termination.
+
+        Args:
+            term_a (Union[NautobotCable, NautobotCT]): Either a Cable or CircuitTermination.
+            term_b (Union[NautobotCable, NautobotCT]): Either a Cable or CircuitTermination.
+
+        Returns:
+            NautobotCable: Cable if found.
+        """
+        try:
+            conn = self.find_cable(
+                term_a=term_a,
+                term_a_type=ContentType.objects.get(app_label="circuits", model="circuittermination"),
+                term_b=term_b,
+                term_b_type=ContentType.objects.get(app_label="dcim", model="interface"),
+            )
+        except NautobotCable.DoesNotExist:
+            try:
+                conn = self.find_cable(
+                    term_a=term_a,
+                    term_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
+                    term_b=term_b,
+                    term_b_type=ContentType.objects.get(app_label="circuits", model="circuittermination"),
+                )
+            except NautobotCable.DoesNotExist:
+                return False
+        return conn
+
+    def find_cable_to_interface(self, term_a, term_b):
+        """Method to find a Cable between two interfaces.
+
+        Args:
+            term_a (Union[NautobotCable, NautobotCT]): Either a Cable or CircuitTermination.
+            term_b (Union[NautobotCable, NautobotCT]): Either a Cable or CircuitTermination.
+
+        Returns:
+            NautobotCable: Cable if found.
+        """
+        try:
+            conn = self.find_cable(
+                term_a=term_a,
+                term_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
+                term_b=term_b,
+                term_b_type=ContentType.objects.get(app_label="dcim", model="interface"),
+            )
+            return conn
+        except NautobotCable.DoesNotExist:
+            return False
+
+    def find_cable(
+        self,
+        term_a: Union[NautobotCable, NautobotCT],
+        term_a_type: ContentType,
+        term_b: Union[NautobotCable, NautobotCT],
+        term_b_type: ContentType,
+    ) -> NautobotCable:
+        """Method to find a Cable.
+
+        Args:
+            term_a (Union[NautobotCable, NautobotCT]): Either a Cable or CircuitTermination.
+            term_a_type (ContentType): The ContentType for `term_a`.
+            term_b (Union[NautobotCable, NautobotCT]): Either a Cable or CircuitTermination.
+            term_b_type (ContentType): The ContentType for `term_b`.
+
+        Returns:
+            NautobotCable: Cable if found.
+        """
+        return NautobotCable.objects.get(
+            termination_a_type=term_a_type,
+            termination_a_id=term_a.id,
+            termination_b_type=term_b_type,
+            termination_b_id=term_b.id,
+        )
 
 
 Building.update_forward_refs()

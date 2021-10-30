@@ -443,33 +443,81 @@ class NautobotAdapter(DiffSync):
                 dst_type="interface",
                 tags=nbutils.get_tag_strings(_cable.tags),
             )
-            if "interface" in str(_cable.termination_a_type):
-                src_port = Interface.objects.get(id=_cable.termination_a_id)
-                if src_port.mac_address:
-                    mac_addr = str(src_port.mac_address).replace(":", "").lower()
-                else:
-                    mac_addr = None
-                new_conn.src_port = src_port.name
-                new_conn.src_device = src_port.device.name
-                new_conn.src_port_mac = mac_addr
-            elif "circuit" in str(_cable.termination_a_type):
-                new_conn.src_type = "circuit"
-                new_conn.src_port = CircuitTermination.objects.get(id=_cable.termination_a_id).circuit.cid
-                new_conn.src_device = CircuitTermination.objects.get(id=_cable.termination_a_id).circuit.cid
-            if "interface" in str(_cable.termination_b_type):
-                dst_port = Interface.objects.get(id=_cable.termination_b_id)
-                if dst_port.mac_address:
-                    mac_addr = str(dst_port.mac_address).replace(":", "").lower()
-                else:
-                    mac_addr = None
-                new_conn.dst_port = dst_port.name
-                new_conn.dst_device = dst_port.device.name
-                new_conn.dst_port_mac = mac_addr
-            elif "circuit" in str(_cable.termination_b_type):
-                new_conn.dst_type = "circuit"
-                new_conn.dst_port = CircuitTermination.objects.get(id=_cable.termination_b_id).circuit.cid
-                new_conn.dst_device = CircuitTermination.objects.get(id=_cable.termination_b_id).circuit.cid
+            new_conn = self.add_src_connection(
+                cable_term_type=_cable.termination_a_type, cable_term_id=_cable.termination_a_id, connection=new_conn
+            )
+            new_conn = self.add_dst_connection(
+                cable_term_type=_cable.termination_b_type, cable_term_id=_cable.termination_b_id, connection=new_conn
+            )
             self.add(new_conn)
+            # Now to ensure that diff matches, add a connection from reverse side.
+            new_conn = self.add_src_connection(
+                cable_term_type=_cable.termination_b_type, cable_term_id=_cable.termination_b_id, connection=new_conn
+            )
+            new_conn = self.add_dst_connection(
+                cable_term_type=_cable.termination_a_type, cable_term_id=_cable.termination_a_id, connection=new_conn
+            )
+            self.add(new_conn)
+
+    def add_src_connection(
+        self, cable_term_type: Cable, cable_term_id: Cable, connection: dcim.Connection
+    ) -> dcim.Connection:
+        """Method to fill in source portion of a Connection object.
+
+        Works in conjunction with the `load_cables` and `add_dst_connection` methods.
+
+        Args:
+            cable_term_type (Cable): The `termination_a_type` or `termination_b_type` attribute from a Cable object.
+            cable_term_id (Cable): The `termination_a_id` or `termination_b_id` attribute from a Cable object.
+            connection (dcim.Connection): Connection object being created. Expected to be empty with tags and types default `interface` type set for src side.
+
+        Returns:
+            dcim.Connection: Updated Connection object with source attributes populated.
+        """
+        if "interface" in str(cable_term_type):
+            src_port = Interface.objects.get(id=cable_term_id)
+            if src_port.mac_address:
+                mac_addr = str(src_port.mac_address).replace(":", "").lower()
+            else:
+                mac_addr = None
+            connection.src_port = src_port.name
+            connection.src_device = src_port.device.name
+            connection.src_port_mac = mac_addr
+        elif "circuit" in str(cable_term_type):
+            connection.src_type = "circuit"
+            connection.src_port = CircuitTermination.objects.get(id=cable_term_id).circuit.cid
+            connection.src_device = CircuitTermination.objects.get(id=cable_term_id).circuit.cid
+        return connection
+
+    def add_dst_connection(
+        self, cable_term_type: Cable, cable_term_id: Cable, connection: dcim.Connection
+    ) -> dcim.Connection:
+        """Method to fill in destination portion of a Connection object.
+
+        Works in conjunction with the `load_cables` and `add_src_connection` methods.
+
+        Args:
+            cable_term_type (Cable): The `termination_a_type` or `termination_b_type` attribute from a Cable object.
+            cable_term_id (Cable): The `termination_a_id` or `termination_b_id` attribute from a Cable object.
+            connection (dcim.Connection): Connection object being created. Expected to be empty with tags and types default `interface` type set for dst side.
+
+        Returns:
+            dcim.Connection: Updated Connection object with destination attributes populated.
+        """
+        if "interface" in str(cable_term_type):
+            dst_port = Interface.objects.get(id=cable_term_id)
+            if dst_port.mac_address:
+                mac_addr = str(dst_port.mac_address).replace(":", "").lower()
+            else:
+                mac_addr = None
+            connection.dst_port = dst_port.name
+            connection.dst_device = dst_port.device.name
+            connection.dst_port_mac = mac_addr
+        elif "circuit" in str(cable_term_type):
+            connection.dst_type = "circuit"
+            connection.dst_port = CircuitTermination.objects.get(id=cable_term_id).circuit.cid
+            connection.dst_device = CircuitTermination.objects.get(id=cable_term_id).circuit.cid
+        return connection
 
     def load_providers(self):
         """Add Nautobot Provider objects as DiffSync Provider models."""

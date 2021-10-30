@@ -536,6 +536,18 @@ class Device42Adapter(DiffSync):
                     dst_type="interface",
                 )
                 self.add(new_conn)
+                # in order to have cables match up to Nautobot, we need to add from both sides
+                rev_conn = self.conn(
+                    src_device=self.device_map[_conn["dst_device"]]["name"],
+                    src_port=self.port_map[_conn["dst_port"]]["port"],
+                    src_port_mac=self.port_map[_conn["dst_port"]]["hwaddress"],
+                    src_type="interface",
+                    dst_device=self.device_map[_conn["src_device"]]["name"],
+                    dst_port=self.port_map[_conn["src_port"]]["port"],
+                    dst_port_mac=self.port_map[_conn["src_port"]]["hwaddress"],
+                    dst_type="interface",
+                )
+                self.add(rev_conn)
             except ObjectAlreadyExists as err:
                 if PLUGIN_CFG.get("verbose_debug"):
                     self.job.log_warning(err)
