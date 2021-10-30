@@ -27,7 +27,6 @@ from nautobot_device42_sync.diffsync.from_d42.models import ipam
 from nautobot_device42_sync.diffsync.from_d42.models import circuits
 from nautobot_device42_sync.constant import USE_DNS, PLUGIN_CFG
 from nautobot_device42_sync.diffsync import nbutils
-from netutils.bandwidth import bits_to_name
 
 
 class NautobotAdapter(DiffSync):
