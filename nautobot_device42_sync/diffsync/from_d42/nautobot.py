@@ -542,6 +542,10 @@ class NautobotAdapter(DiffSync):
                 type=_circuit.type.name,
                 status=_circuit.status.name,
                 install_date=_circuit.install_date,
+                origin_int=_circuit.termination_a.connected_endpoint.name,
+                origin_dev=_circuit.termination_a.connected_endpoint.device.name,
+                endpoint_int=_circuit.termination_z.connected_endpoint.name,
+                endpoint_dev=_circuit.termination_z.connected_endpoint.device.name,
                 bandwidth=_circuit.commit_rate,
                 tags=nbutils.get_tag_strings(_circuit.tags),
             )
