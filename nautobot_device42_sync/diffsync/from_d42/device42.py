@@ -596,15 +596,12 @@ class Device42Adapter(DiffSync):
         _circuits = self._device42.get_telcocircuits()
         for _tc in _circuits:
             self.load_provider(_tc)
-            src_type, dst_type = "circuit", "circuit"
             if _tc["origin_type"] == "Device Port":
                 origin_int = self.port_map[_tc["origin_netport_fk"]]["port"]
                 origin_dev = self.port_map[_tc["origin_netport_fk"]]["device"]
-                src_type = "interface"
             if _tc["end_point_type"] == "Device Port":
                 endpoint_int = self.port_map[_tc["end_point_netport_fk"]]["port"]
                 endpoint_dev = self.port_map[_tc["end_point_netport_fk"]]["device"]
-                dst_type = "interface"
             new_circuit = self.circuit(
                 circuit_id=_tc["circuit_id"],
                 provider=self.vendor_map[_tc["vendor_fk"]]["name"],
@@ -624,7 +621,8 @@ class Device42Adapter(DiffSync):
             a_side_conn = self.conn(
                 src_device=origin_dev,
                 src_port=origin_int,
-                src_type=src_type,
+                src_port_mac=self.port_map[_tc["origin_netport_fk"]]["hwaddress"],
+                src_type="interface",
                 dst_device=_tc["circuit_id"],
                 dst_port=_tc["circuit_id"],
                 dst_type="circuit",
@@ -637,7 +635,8 @@ class Device42Adapter(DiffSync):
                 src_type="circuit",
                 dst_device=endpoint_dev,
                 dst_port=endpoint_int,
-                dst_type=dst_type,
+                dst_port_mac=self.port_map[_tc["end_point_netport_fk"]]["hwaddress"],
+                dst_type="interface",
             )
             self.add(z_side_conn)
 
