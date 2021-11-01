@@ -18,6 +18,27 @@ def sanitize_string(san_str: str):
     return san_str.replace("\u200b", "").replace("\r", "")
 
 
+def get_circuit_status(status: str) -> str:
+    """Map Device42 Status to Nautobot Status.
+
+    Args:
+        status (str): Device42 Status to be mapped.
+
+    Returns:
+        str: Device42 mapped Status.
+    """
+    STATUS_MAP = {
+        "Production": "Active",
+        "Provisioning": "Provisioning",
+        "Canceled": "Deprovisioning",
+        "Decommissioned": "Decommissioned",
+    }
+    if status in STATUS_MAP:
+        return STATUS_MAP[status]
+    else:
+        return "Offline"
+
+
 class Device42Adapter(DiffSync):
     """DiffSync adapter using requests to communicate to Device42 server."""
 
@@ -589,7 +610,7 @@ class Device42Adapter(DiffSync):
                 provider=self.vendor_map[_tc["vendor_fk"]]["name"],
                 notes=_tc["notes"],
                 type=_tc["type_name"],
-                status=_tc["status"],
+                status=get_circuit_status(_tc["status"]),
                 install_date=_tc["turn_on_date"] if _tc.get("turn_on_date") else _tc["provision_date"],
                 origin_int=origin_int,
                 origin_dev=origin_dev,

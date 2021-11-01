@@ -118,27 +118,6 @@ class Circuit(DiffSyncModel):
     bandwidth: Optional[int]
     tags: Optional[List[str]]
 
-    @staticmethod
-    def get_circuit_status(status: str) -> str:
-        """Map Device42 Status to Nautobot Status.
-
-        Args:
-            status (str): Device42 Status to be mapped.
-
-        Returns:
-            str: Device42 mapped Status.
-        """
-        STATUS_MAP = {
-            "Production": "Active",
-            "Provisioning": "Provisioning",
-            "Canceled": "Deprovisioning",
-            "Decommissioned": "Decommissioned",
-        }
-        if status in STATUS_MAP:
-            return STATUS_MAP[status]
-        else:
-            return "Offline"
-
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Circuit object in Nautobot."""
@@ -149,7 +128,7 @@ class Circuit(DiffSyncModel):
                 cid=ids["circuit_id"],
                 provider=NautobotProvider.objects.get(name=ids["provider"]),
                 type=d42utils.verify_circuit_type(attrs["type"]),
-                status=NautobotStatus.objects.get(name=cls.get_circuit_status(attrs["status"])),
+                status=NautobotStatus.objects.get(name=attrs["status"]),
                 install_date=attrs["install_date"] if attrs.get("install_date") else None,
                 commit_rate=attrs["bandwidth"] if attrs.get("bandwidth") else None,
                 comments=attrs["notes"] if attrs.get("notes") else "",
