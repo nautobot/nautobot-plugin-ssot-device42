@@ -1227,7 +1227,4 @@ class Connection(DiffSyncModel):
 
 Building.update_forward_refs()
 Room.update_forward_refs()
-Rack.update_forward_refs()
-Vendor.update_forward_refs()
-Cluster.update_forward_refs()
 Device.update_forward_refs()
