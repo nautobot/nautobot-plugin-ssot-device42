@@ -349,7 +349,7 @@ class NautobotAdapter(DiffSync):
             ip_net = ipaddress.ip_network(_pf.prefix)
             new_pf = self.subnet(
                 network=str(ip_net.network_address),
-                mask_bits=str(ip_net.prefixlen),
+                mask_bits=ip_net.prefixlen,
                 description=_pf.description,
                 vrf=_pf.vrf.name,
                 tags=nautobot.get_tag_strings(_pf.tags),
