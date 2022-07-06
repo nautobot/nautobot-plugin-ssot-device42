@@ -821,7 +821,7 @@ class Device42Adapter(DiffSync):
 
         Args:
             dev_name (str): Name of Device to find Management interface.
-            diffsync (object, optional): Diffsync object for handling interactions with Job, such as logging. Defaults to None.
+            diffsync (object, optional): DiffSync object for handling interactions with Job, such as logging. Defaults to None.
 
         Returns:
             Port: DiffSyncModel Port object that's assumed to be Management interface if found. False if not found.
