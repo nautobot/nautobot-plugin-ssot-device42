@@ -806,14 +806,14 @@ class Device42Adapter(DiffSync):
 
     def check_dns(self):
         """Method to check if a Device has a DNS record and assign as primary if so."""
-        for _device in self._data["device"]:
-            if not re.search(r"\s-\s\w+\s?\d+", _device) and not re.search(
-                r"AP[A-F0-9]{4}\.[A-F0-9]{4}.[A-F0-9]{4}", _device
+        for _device in self.store.get_all(model=dcim.Device):
+            if not re.search(r"\s-\s\w+\s?\d+", _device.name) and not re.search(
+                r"AP[A-F0-9]{4}\.[A-F0-9]{4}.[A-F0-9]{4}", _device.name
             ):
-                self.set_primary_from_dns(dev_name=_device, diffsync=self.job)
+                self.set_primary_from_dns(dev_name=_device.name, diffsync=self.job)
             else:
                 if self.job.debug:
-                    self.job.log_warning(message=f"Skipping {_device} due to invalid Device name.")
+                    self.job.log_warning(message=f"Skipping {_device.name} due to invalid Device name.")
                 continue
 
     def get_management_intf(self, dev_name: str, diffsync=None):
