@@ -301,8 +301,10 @@ class Device42Adapter(DiffSync):
                     manufacturer=_model["manufacturer"] if _model.get("manufacturer") else "Unknown",
                     size=float(round(_model["size"])) if _model.get("size") else 1.0,
                     depth=_model["depth"] if _model.get("depth") else "Half Depth",
-                    part_number=_model["part_no"],
-                    custom_fields=sorted(_model["custom_fields"], key=lambda d: d["key"]),
+                    part_number=_model["part_no"] if _model.get("part_no") else "",
+                    custom_fields=sorted(_model["custom_fields"], key=lambda d: d["key"])
+                    if _model.get("custom_fields")
+                    else [],
                     uuid=None,
                 )
                 try:
