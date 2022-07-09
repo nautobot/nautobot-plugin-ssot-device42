@@ -896,8 +896,6 @@ class Port(DiffSyncModel):
     @classmethod
     def create(cls, diffsync, ids, attrs):  # pylint: disable=inconsistent-return-statements
         """Create Interface object in Nautobot."""
-        if diffsync.job.debug:
-            diffsync.job.log_debug(message=f"Creating Interface {ids['name']} for {ids['device']}.")
         try:
             if ids.get("device"):
                 _dev = NautobotDevice.objects.get(name=ids["device"])

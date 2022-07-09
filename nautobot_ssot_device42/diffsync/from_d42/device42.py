@@ -474,7 +474,7 @@ class Device42Adapter(DiffSync):
                         mtu=_port["mtu"] if _port.get("mtu") in range(1, 65537) else 1500,
                         description=_port["description"],
                         mac_addr=_port["hwaddress"][:13],
-                        type=get_intf_type(intf_record=_port, diffsync=self.job),
+                        type=get_intf_type(intf_record=_port),
                         tags=_tags,
                         mode="access",
                         custom_fields=None,

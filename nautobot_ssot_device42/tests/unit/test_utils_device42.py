@@ -48,10 +48,7 @@ class TestUtilsDevice42(TestCase):
             "discovered_type": "ethernetCsmacd",
             "port_speed": "1.0 Gbps",
         }
-        dsync = MagicMock()
-        dsync.log_debug = MagicMock()
-        self.assertEqual(device42.get_intf_type(intf_record=eth_intf, diffsync=dsync), "1000base-t")
-        dsync.log_debug.assert_called_once_with(message="Matched on intf mapping. 1.0 Gbps")
+        self.assertEqual(device42.get_intf_type(intf_record=eth_intf), "1000base-t")
 
     @patch.object(Device42DataSource, "debug", True)
     def test_get_intf_type_fc_intf(self):
@@ -63,10 +60,7 @@ class TestUtilsDevice42(TestCase):
             "port_speed": "1.0 Gbps",
             "device_name": "core-router.testexample.com",
         }
-        dsync = MagicMock()
-        dsync.log_debug = MagicMock()
-        self.assertEqual(device42.get_intf_type(intf_record=fc_intf, diffsync=dsync), "1gfc-sfp")
-        dsync.log_debug.assert_called_once_with(message="Matched on FibreChannel. FC0/1 core-router.testexample.com")
+        self.assertEqual(device42.get_intf_type(intf_record=fc_intf), "1gfc-sfp")
 
     @patch.object(Device42DataSource, "debug", True)
     def test_get_intf_type_unknown_phy_intf(self):
@@ -77,10 +71,7 @@ class TestUtilsDevice42(TestCase):
             "discovered_type": "Unknown",
             "port_speed": "1.0 Gbps",
         }
-        dsync = MagicMock()
-        dsync.log_debug = MagicMock()
-        self.assertEqual(device42.get_intf_type(intf_record=unknown_phy_intf_speed, diffsync=dsync), "1000base-t")
-        dsync.log_debug.assert_called_once_with(message="Matched on intf mapping. 1.0 Gbps")
+        self.assertEqual(device42.get_intf_type(intf_record=unknown_phy_intf_speed), "1000base-t")
 
     @patch.object(Device42DataSource, "debug", True)
     def test_get_intf_name_mapping(self):
@@ -91,10 +82,7 @@ class TestUtilsDevice42(TestCase):
             "discovered_type": "ethernetCsmacd",
             "port_speed": "10 Mbps",
         }
-        dsync = MagicMock()
-        dsync.log_debug = MagicMock()
-        self.assertEqual(device42.get_intf_type(intf_record=ethernet_interface, diffsync=dsync), "100base-tx")
-        dsync.log_debug.assert_called_once_with(message="Matched on interface name FastEthernet")
+        self.assertEqual(device42.get_intf_type(intf_record=ethernet_interface), "100base-tx")
 
     def test_get_intf_type_gigabit_ethernet_intf(self):
         # test physical interface that's discovered as gigabitEthernet
@@ -126,10 +114,7 @@ class TestUtilsDevice42(TestCase):
             "port_speed": "100 Mbps",
             "device_name": "core-router.testexample.com",
         }
-        dsync = MagicMock()
-        dsync.log_debug = MagicMock()
-        self.assertEqual(device42.get_intf_type(intf_record=ad_lag_intf, diffsync=dsync), "lag")
-        dsync.log_debug.assert_called_once_with(message="LAG matched. port-channel100 core-router.testexample.com")
+        self.assertEqual(device42.get_intf_type(intf_record=ad_lag_intf), "lag")
 
     @patch.object(Device42DataSource, "debug", True)
     def test_get_intf_type_lacp_intf(self):
@@ -141,10 +126,7 @@ class TestUtilsDevice42(TestCase):
             "port_speed": "40 Gbps",
             "device_name": "core-router.testexample.com",
         }
-        dsync = MagicMock()
-        dsync.log_debug = MagicMock()
-        self.assertEqual(device42.get_intf_type(intf_record=lacp_intf, diffsync=dsync), "lag")
-        dsync.log_debug.assert_called_once_with(message="LAG matched. Internal_Trunk core-router.testexample.com")
+        self.assertEqual(device42.get_intf_type(intf_record=lacp_intf), "lag")
 
     @patch.object(Device42DataSource, "debug", True)
     def test_get_intf_type_virtual_intf(self):
@@ -156,12 +138,7 @@ class TestUtilsDevice42(TestCase):
             "port_speed": "1.0 Gbps",
             "device_name": "distro-switch.testexample.com",
         }
-        dsync = MagicMock()
-        dsync.log_debug = MagicMock()
-        self.assertEqual(device42.get_intf_type(intf_record=virtual_intf, diffsync=dsync), "virtual")
-        dsync.log_debug.assert_called_once_with(
-            message="Virtual, loopback, or l2vlan interface matched. Vlan100 distro-switch.testexample.com."
-        )
+        self.assertEqual(device42.get_intf_type(intf_record=virtual_intf), "virtual")
 
     @patch.object(Device42DataSource, "debug", True)
     def test_get_intf_type_port_channel_intf(self):
@@ -173,12 +150,7 @@ class TestUtilsDevice42(TestCase):
             "port_speed": "20 Gbps",
             "device_name": "distro-switch.testexample.com",
         }
-        dsync = MagicMock()
-        dsync.log_debug = MagicMock()
-        self.assertEqual(device42.get_intf_type(intf_record=port_channel_intf, diffsync=dsync), "lag")
-        dsync.log_debug.assert_called_once_with(
-            message="Virtual, loopback, or l2vlan interface matched. port-channel100 distro-switch.testexample.com."
-        )
+        self.assertEqual(device42.get_intf_type(intf_record=port_channel_intf), "lag")
 
     netmiko_platforms = [
         ("asa", "asa", "cisco_asa"),
