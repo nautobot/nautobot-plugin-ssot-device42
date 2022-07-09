@@ -17,6 +17,9 @@ from nautobot_ssot_device42.utils.device42 import Device42API
 from .diff import CustomOrderingDiff
 
 
+name = "Device42 SSoT"  # pylint: disable=invalid-name
+
+
 class Device42DataSource(DataSource, Job):
     """Device42 SSoT Data Source."""
 
