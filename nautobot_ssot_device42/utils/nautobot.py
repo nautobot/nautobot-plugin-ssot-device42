@@ -76,7 +76,7 @@ def verify_platform(platform_name: str, manu: str) -> Platform:
             name=_name,
             slug=slugify(platform_name),
             manufacturer=Manufacturer.objects.get(name=manu),
-            napalm_driver=napalm_driver,
+            napalm_driver=napalm_driver[:50],
         )
         platform_obj.validated_save()
     return platform_obj
