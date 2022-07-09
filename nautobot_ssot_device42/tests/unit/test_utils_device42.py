@@ -33,6 +33,8 @@ class TestMissingConfigSetting(TestCase):
 class TestUtilsDevice42(TestCase):
     """Test Device42 util methods."""
 
+    databases = ("default", "job_logs")
+
     def test_merge_offset_dicts(self):
         first_dict = {"total_count": 10, "limit": 2, "offset": 2, "Objects": ["a", "b"]}
         second_dict = {"total_count": 10, "limit": 2, "offset": 4, "Objects": ["c", "d"]}
@@ -197,6 +199,8 @@ class TestUtilsDevice42(TestCase):
 
 class TestDevice42Api(TestCase):  # pylint: disable=too-many-public-methods
     """Test Base Device42 API Client and Calls."""
+
+    databases = ("default", "job_logs")
 
     def setUp(self):
         """Setup Device42API instance."""
