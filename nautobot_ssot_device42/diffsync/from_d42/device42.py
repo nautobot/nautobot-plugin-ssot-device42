@@ -133,23 +133,23 @@ class Device42Adapter(DiffSync):
         self.device42_clusters = self.device42.get_cluster_members()
 
         # mapping of SiteCode (facility) to Building name
-        self.building_sitecode_map = {}
+        self.d42_building_sitecode_map = {}
         # mapping of Building PK to Building info
-        self.building_map = self.device42.get_building_pks()
+        self.d42_building_map = self.device42.get_building_pks()
         # mapping of Customer PK to Customer info
-        self.customer_map = self.device42.get_customer_pks()
+        self.d42_customer_map = self.device42.get_customer_pks()
         # mapping of Room PK to Room info
-        self.room_map = self.device42.get_room_pks()
+        self.d42_room_map = self.device42.get_room_pks()
         # mapping of Rack PK to Rack info
-        self.rack_map = self.device42.get_rack_pks()
+        self.d42_rack_map = self.device42.get_rack_pks()
         # mapping of VLAN PK to VLAN name and ID
-        self.vlan_map = self.device42.get_vlan_info()
+        self.d42_vlan_map = self.device42.get_vlan_info()
         # mapping of Device PK to Device name
-        self.device_map = self.device42.get_device_pks()
+        self.d42_device_map = self.device42.get_device_pks()
         # mapping of Port PK to Port name
-        self.port_map = self.device42.get_port_pks()
+        self.d42_port_map = self.device42.get_port_pks()
         # mapping of Vendor PK to Vendor info
-        self.vendor_map = self.device42.get_vendor_pks()
+        self.d42_vendor_map = self.device42.get_vendor_pks()
 
     @classproperty
     def _device42_hardwares(self):
@@ -176,9 +176,9 @@ class Device42Adapter(DiffSync):
             if (
                 PLUGIN_CFG.get("customer_is_facility")
                 and dev_record.get("customer")
-                and dev_record["customer"] in self.building_sitecode_map
+                and dev_record["customer"] in self.d42_building_sitecode_map
             ):
-                _building = self.building_sitecode_map[dev_record["customer"].upper()]
+                _building = self.d42_building_sitecode_map[dev_record["customer"].upper()]
             else:
                 _building = dev_record.get("building")
         if _building is not None:
@@ -207,7 +207,7 @@ class Device42Adapter(DiffSync):
             )
             _facility = get_facility(diffsync=self, tags=_tags)
             if _facility:
-                self.building_sitecode_map[_facility.upper()] = record["name"]
+                self.d42_building_sitecode_map[_facility.upper()] = record["name"]
             try:
                 self.add(building)
             except ObjectAlreadyExists as err:
@@ -457,8 +457,8 @@ class Device42Adapter(DiffSync):
         """Load Device42 ports."""
         vlan_ports = self.device42.get_ports_with_vlans()
         no_vlan_ports = self.device42.get_ports_wo_vlans()
-        # merged_ports = self.filter_ports(vlan_ports, no_vlan_ports)
-        merged_ports = vlan_ports + no_vlan_ports
+        merged_ports = self.filter_ports(vlan_ports, no_vlan_ports)
+        # merged_ports = vlan_ports + no_vlan_ports
         default_cfs = self.device42.get_port_default_custom_fields()
         _cfs = self.device42.get_port_custom_fields()
         for _port in merged_ports:
@@ -485,11 +485,11 @@ class Device42Adapter(DiffSync):
                     if _port.get("vlan_pks"):
                         _tags = []
                         for _pk in _port["vlan_pks"]:
-                            if _pk in self.vlan_map and self.vlan_map[_pk]["vid"] != 0:
+                            if _pk in self.d42_vlan_map and self.d42_vlan_map[_pk]["vid"] != 0:
                                 _tags.append(
                                     {
-                                        "vlan_name": self.vlan_map[_pk]["name"],
-                                        "vlan_id": str(self.vlan_map[_pk]["vid"]),
+                                        "vlan_name": self.d42_vlan_map[_pk]["name"],
+                                        "vlan_id": str(self.d42_vlan_map[_pk]["vid"]),
                                     }
                                 )
                         _sorted_list = sorted(_tags, key=lambda k: k["vlan_id"])
@@ -652,7 +652,7 @@ class Device42Adapter(DiffSync):
                         {
                             "name": _vlan_name,
                             "vlan_id": _info["vid"],
-                            "building": self.building_sitecode_map[_info["customer"]],
+                            "building": self.d42_building_sitecode_map[_info["customer"]],
                         },
                     )
                 else:
@@ -661,8 +661,8 @@ class Device42Adapter(DiffSync):
                 if self.job.debug:
                     self.job.log_warning(message=f"VLAN {_vlan_name} already exists. {err}")
             except ObjectNotFound:
-                if _info["vlan_pk"] in self.vlan_map and self.vlan_map[_info["vlan_pk"]].get("custom_fields"):
-                    _cfs = sorted(self.vlan_map[_info["vlan_pk"]]["custom_fields"], key=lambda d: d["key"])
+                if _info["vlan_pk"] in self.d42_vlan_map and self.d42_vlan_map[_info["vlan_pk"]].get("custom_fields"):
+                    _cfs = sorted(self.d42_vlan_map[_info["vlan_pk"]]["custom_fields"], key=lambda d: d["key"])
                 else:
                     _cfs = None
                 new_vlan = self.vlan(
@@ -676,7 +676,7 @@ class Device42Adapter(DiffSync):
                 if _info.get("building"):
                     new_vlan.building = _info["building"]
                 elif is_truthy(PLUGIN_CFG.get("customer_is_facility")) and _info.get("customer"):
-                    new_vlan.building = self.building_sitecode_map[_info["customer"]]
+                    new_vlan.building = self.d42_building_sitecode_map[_info["customer"]]
                 else:
                     new_vlan.building = "Unknown"
                 self.add(new_vlan)
@@ -687,13 +687,13 @@ class Device42Adapter(DiffSync):
         for _conn in _port_conns:
             try:
                 new_conn = self.conn(
-                    src_device=self.device_map[_conn["src_device"]]["name"],
-                    src_port=self.port_map[_conn["src_port"]]["port"],
-                    src_port_mac=self.port_map[_conn["src_port"]]["hwaddress"],
+                    src_device=self.d42_device_map[_conn["src_device"]]["name"],
+                    src_port=self.d42_port_map[_conn["src_port"]]["port"],
+                    src_port_mac=self.d42_port_map[_conn["src_port"]]["hwaddress"],
                     src_type="interface",
-                    dst_device=self.device_map[_conn["dst_device"]]["name"],
-                    dst_port=self.port_map[_conn["dst_port"]]["port"],
-                    dst_port_mac=self.port_map[_conn["dst_port"]]["hwaddress"],
+                    dst_device=self.d42_device_map[_conn["dst_device"]]["name"],
+                    dst_port=self.d42_port_map[_conn["dst_port"]]["port"],
+                    dst_port_mac=self.d42_port_map[_conn["dst_port"]]["hwaddress"],
                     dst_type="interface",
                     tags=None,
                     uuid=None,
@@ -701,13 +701,13 @@ class Device42Adapter(DiffSync):
                 self.add(new_conn)
                 # in order to have cables match up to Nautobot, we need to add from both sides
                 rev_conn = self.conn(
-                    src_device=self.device_map[_conn["dst_device"]]["name"],
-                    src_port=self.port_map[_conn["dst_port"]]["port"],
-                    src_port_mac=self.port_map[_conn["dst_port"]]["hwaddress"],
+                    src_device=self.d42_device_map[_conn["dst_device"]]["name"],
+                    src_port=self.d42_port_map[_conn["dst_port"]]["port"],
+                    src_port_mac=self.d42_port_map[_conn["dst_port"]]["hwaddress"],
                     src_type="interface",
-                    dst_device=self.device_map[_conn["src_device"]]["name"],
-                    dst_port=self.port_map[_conn["src_port"]]["port"],
-                    dst_port_mac=self.port_map[_conn["src_port"]]["hwaddress"],
+                    dst_device=self.d42_device_map[_conn["src_device"]]["name"],
+                    dst_port=self.d42_port_map[_conn["src_port"]]["port"],
+                    dst_port_mac=self.d42_port_map[_conn["src_port"]]["hwaddress"],
                     dst_type="interface",
                     tags=None,
                     uuid=None,
@@ -720,7 +720,7 @@ class Device42Adapter(DiffSync):
 
     def load_provider(self, provider_info: dict):
         """Load Device42 Providers."""
-        _prov = self.vendor_map[provider_info["vendor_fk"]]
+        _prov = self.d42_vendor_map[provider_info["vendor_fk"]]
         try:
             self.get(self.provider, _prov.get("name"))
         except ObjectNotFound:
@@ -744,11 +744,11 @@ class Device42Adapter(DiffSync):
         for _tc in _circuits:
             self.load_provider(_tc)
             if _tc["origin_type"] == "Device Port" and _tc["origin_netport_fk"] is not None:
-                origin_int = self.port_map[_tc["origin_netport_fk"]]["port"]
-                origin_dev = self.port_map[_tc["origin_netport_fk"]]["device"]
+                origin_int = self.d42_port_map[_tc["origin_netport_fk"]]["port"]
+                origin_dev = self.d42_port_map[_tc["origin_netport_fk"]]["device"]
             if _tc["end_point_type"] == "Device Port" and _tc["end_point_netport_fk"] is not None:
-                endpoint_int = self.port_map[_tc["end_point_netport_fk"]]["port"]
-                endpoint_dev = self.port_map[_tc["end_point_netport_fk"]]["device"]
+                endpoint_int = self.d42_port_map[_tc["end_point_netport_fk"]]["port"]
+                endpoint_dev = self.d42_port_map[_tc["end_point_netport_fk"]]["device"]
             if _tc["origin_type"] == "Patch panel port" and _tc["origin_patchpanelport_fk"] is not None:
                 origin_int = ppanel_ports[_tc["origin_patchpanelport_fk"]]["number"]
                 origin_dev = ppanel_ports[_tc["origin_patchpanelport_fk"]]["name"]
@@ -757,7 +757,7 @@ class Device42Adapter(DiffSync):
                 origin_dev = ppanel_ports[_tc["end_point_patchpanelport_fk"]]["name"]
             new_circuit = self.circuit(
                 circuit_id=_tc["circuit_id"],
-                provider=self.vendor_map[_tc["vendor_fk"]]["name"],
+                provider=self.d42_vendor_map[_tc["vendor_fk"]]["name"],
                 notes=_tc["notes"],
                 type=_tc["type_name"],
                 status=get_circuit_status(_tc["status"]),
@@ -776,7 +776,7 @@ class Device42Adapter(DiffSync):
                 a_side_conn = self.conn(
                     src_device=origin_dev,
                     src_port=origin_int,
-                    src_port_mac=self.port_map[_tc["origin_netport_fk"]]["hwaddress"]
+                    src_port_mac=self.d42_port_map[_tc["origin_netport_fk"]]["hwaddress"]
                     if _tc["origin_type"] == "Device"
                     else None,
                     src_type="interface" if _tc["origin_type"] == "Device Port" else "patch panel",
@@ -796,7 +796,7 @@ class Device42Adapter(DiffSync):
                     src_type="circuit",
                     dst_device=endpoint_dev,
                     dst_port=endpoint_int,
-                    dst_port_mac=self.port_map[_tc["end_point_netport_fk"]]["hwaddress"]
+                    dst_port_mac=self.d42_port_map[_tc["end_point_netport_fk"]]["hwaddress"]
                     if _tc["end_point_type"] == "Device"
                     else None,
                     dst_type="interface" if _tc["end_point_type"] == "Device Port" else "patch panel",
@@ -948,19 +948,19 @@ class Device42Adapter(DiffSync):
         for panel in panels:
             _building, _room, _rack = None, None, None
             if PLUGIN_CFG.get("customer_is_facility") and panel["customer_fk"] is not None:
-                _building = self.customer_map[panel["customer_fk"]]["name"]
+                _building = self.d42_customer_map[panel["customer_fk"]]["name"]
             if panel["building_fk"] is not None:
-                _building = self.building_map[panel["building_fk"]]["name"]
+                _building = self.d42_building_map[panel["building_fk"]]["name"]
             elif panel["calculated_building_fk"] is not None:
-                _building = self.building_map[panel["calculated_building_fk"]]["name"]
+                _building = self.d42_building_map[panel["calculated_building_fk"]]["name"]
             if panel["room_fk"] is not None:
-                _room = self.room_map[panel["room_fk"]]["name"]
+                _room = self.d42_room_map[panel["room_fk"]]["name"]
             elif panel["calculated_room_fk"] is not None:
-                _room = self.room_map[panel["calculated_room_fk"]]["name"]
+                _room = self.d42_room_map[panel["calculated_room_fk"]]["name"]
             if panel["rack_fk"] is not None:
-                _rack = self.rack_map[panel["rack_fk"]]["name"]
+                _rack = self.d42_rack_map[panel["rack_fk"]]["name"]
             elif panel["calculated_rack_fk"] is not None:
-                _rack = self.rack_map[panel["rack_fk"]]["name"]
+                _rack = self.d42_rack_map[panel["rack_fk"]]["name"]
             if _building is None and _room is None and _rack is None:
                 if self.job.debug:
                     self.job.log_debug(
