@@ -80,7 +80,7 @@ class NautobotAdapter(DiffSync):
     ]
 
     def __init__(self, *args, job=None, sync=None, **kwargs):
-        """Initialize the Device42 DiffSync adapter.
+        """Initialize the Nautobot DiffSync adapter.
 
         Args:
             job (object, optional): Nautobot job. Defaults to None.
