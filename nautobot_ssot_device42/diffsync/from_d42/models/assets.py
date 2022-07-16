@@ -22,18 +22,18 @@ def find_site(diffsync, attrs):
         elif attrs.get("rack") is not None:
             pp_site = Rack.objects.get(name=attrs["rack"]).site
     except Site.DoesNotExist:
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_warning(message=f"Unable to find Site {attrs.get('building')}.")
     except RackGroup.DoesNotExist:
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_warning(
                 message=f"Unable to find Site using Room {attrs.get('room')} & Rack {attrs.get('rack')}."
             )
     except Rack.DoesNotExist:
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_warning(message=f"Unable to find Site using Rack {attrs.get('rack')}.")
     except Rack.MultipleObjectsReturned:
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_warning(
                 message=f"Unable to find Site using Rack {attrs.get('rack')} as more than one was found."
             )
@@ -57,13 +57,13 @@ def find_rack(diffsync, ids, attrs):
         elif attrs.get("rack") is not None:
             pp_rack = Rack.objects.get(name=_rack)
     except RackGroup.DoesNotExist:
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_warning(message=f"Unable to find Rack using Room {_room} & Rack {_rack}.")
     except Rack.DoesNotExist:
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_warning(message=f"Unable to find Rack {_rack}.")
     except Rack.MultipleObjectsReturned:
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_warning(message=f"Unable to find Rack {_rack} as more than one was found.")
     return pp_rack
 
@@ -107,7 +107,7 @@ class PatchPanel(DiffSyncModel):
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Patch Panel Device in Nautobot."""
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_debug(message=f"Creating patch panel {ids['name']}.")
         try:
             Device.objects.get(name=ids["name"])
@@ -136,7 +136,7 @@ class PatchPanel(DiffSyncModel):
                     patch_panel.validated_save()
                     return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
                 except ValidationError as err:
-                    if diffsync.job.debug:
+                    if diffsync.job.kwargs.get("debug"):
                         diffsync.job.log_warning(message=f"Unable to create {ids['name']} patch panel. {err}")
             return None
 
@@ -173,7 +173,7 @@ class PatchPanel(DiffSyncModel):
             ppanel.validated_save()
             return super().update(attrs)
         except ValidationError as err:
-            if self.diffsync.job.debug:
+            if self.diffsync.job.kwargs.get("debug"):
                 self.diffsync.job.log_warning(message=f"Unable to update {self.name} patch panel. {err}")
             return None
 
@@ -186,7 +186,7 @@ class PatchPanel(DiffSyncModel):
         """
         if PLUGIN_CFG.get("delete_on_sync"):
             super().delete()
-            if self.diffsync.job.debug:
+            if self.diffsync.job.kwargs.get("debug"):
                 self.diffsync.job.log_warning(message=f"Patch panel {self.name} will be deleted.")
             _pp = Device.objects.get(id=self.uuid)
             self.diffsync.objects_to_delete["patchpanel"].append(_pp)  # pylint: disable=protected-access
@@ -209,7 +209,7 @@ class PatchPanelRearPort(DiffSyncModel):
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Patch Panel Port in Nautobot."""
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_debug(message=f"Creating patch panel port {ids['name']} for {ids['patchpanel']}.")
         try:
             RearPort.objects.get(name=ids["name"], device__name=ids["patchpanel"])
@@ -224,7 +224,7 @@ class PatchPanelRearPort(DiffSyncModel):
                 rear_port.validated_save()
                 return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
             except ValidationError as err:
-                if diffsync.job.debug:
+                if diffsync.job.kwargs.get("debug"):
                     diffsync.job.log_debug(message=f"Unable to create patch panel {ids['name']}. {err}")
                 return None
 
@@ -237,7 +237,7 @@ class PatchPanelRearPort(DiffSyncModel):
             port.validated_save()
             return super().update(attrs)
         except ValidationError as err:
-            if self.diffsync.job.debug:
+            if self.diffsync.job.kwargs.get("debug"):
                 self.diffsync.job.log_warning(message=f"Unable to update {self.name} RearPort. {err}")
             return None
 
@@ -245,7 +245,7 @@ class PatchPanelRearPort(DiffSyncModel):
         """Delete RearPort object from Nautobot."""
         if PLUGIN_CFG.get("delete_on_sync"):
             super().delete()
-            if self.diffsync.job.debug:
+            if self.diffsync.job.kwargs.get("debug"):
                 self.diffsync.job.log_warning(message=f"RearPort {self.name} for {self.patchpanel} will be deleted.")
             port = RearPort.objects.get(id=self.uuid)
             port.delete()
@@ -268,7 +268,7 @@ class PatchPanelFrontPort(DiffSyncModel):
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Patch Panel FrontPort in Nautobot."""
-        if diffsync.job.debug:
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_debug(message=f"Creating patch panel front port {ids['name']} for {ids['patchpanel']}.")
         try:
             FrontPort.objects.get(name=ids["name"], device__name=ids["patchpanel"])
@@ -284,7 +284,7 @@ class PatchPanelFrontPort(DiffSyncModel):
                 front_port.validated_save()
                 return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
             except ValidationError as err:
-                if diffsync.job.debug:
+                if diffsync.job.kwargs.get("debug"):
                     diffsync.job.log_debug(message=f"Unable to create patch panel front port {ids['name']}. {err}")
                 return None
 
@@ -297,7 +297,7 @@ class PatchPanelFrontPort(DiffSyncModel):
             port.validated_save()
             return super().update(attrs)
         except ValidationError as err:
-            if self.diffsync.job.debug:
+            if self.diffsync.job.kwargs.get("debug"):
                 self.diffsync.job.log_warning(message=f"Unable to update {self.name} FrontPort. {err}")
             return None
 
@@ -305,7 +305,7 @@ class PatchPanelFrontPort(DiffSyncModel):
         """Delete FrontPort object from Nautobot."""
         if PLUGIN_CFG.get("delete_on_sync"):
             super().delete()
-            if self.diffsync.job.debug:
+            if self.diffsync.job.kwargs.get("debug"):
                 self.diffsync.job.log_warning(message=f"FrontPort {self.name} for {self.patchpanel} will be deleted.")
             port = FrontPort.objects.get(id=self.uuid)
             port.delete()

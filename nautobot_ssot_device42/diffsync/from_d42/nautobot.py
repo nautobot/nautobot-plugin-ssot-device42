@@ -177,7 +177,7 @@ class NautobotAdapter(DiffSync):
                 _room = self.get(self.room, {"name": rack.group, "building": _building_name})
                 _room.add_child(child=new_rack)
             except ObjectAlreadyExists as err:
-                if self.job.debug:
+                if self.job.kwargs.get("debug"):
                     self.job.log_warning(message=err)
 
     def load_manufacturers(self):
@@ -281,7 +281,7 @@ class NautobotAdapter(DiffSync):
     def load_interfaces(self):
         """Add Nautobot Interface objects as DiffSync Port models."""
         for port in Interface.objects.all():
-            if self.job.debug:
+            if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading Interface: {port.name} for {port.device}.")
             if port.mac_address:
                 _mac_addr = str(port.mac_address).replace(":", "").lower()
@@ -323,14 +323,14 @@ class NautobotAdapter(DiffSync):
                 _dev = self.get(self.device, port.device.name)
                 _dev.add_child(_port)
             except ObjectAlreadyExists as err:
-                if self.job.debug:
+                if self.job.kwargs.get("debug"):
                     self.job.log_warning(message=f"Port already exists for {port.device_name}. {err}")
                 continue
 
     def load_vrfs(self):
         """Add Nautobot VRF objects as DiffSync VRFGroup models."""
         for vrf in VRF.objects.all():
-            if self.job.debug:
+            if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading VRF: {vrf.name}.")
             _vrf = self.vrf(
                 name=vrf.name,
@@ -344,7 +344,7 @@ class NautobotAdapter(DiffSync):
     def load_prefixes(self):
         """Add Nautobot Prefix objects as DiffSync Subnet models."""
         for _pf in Prefix.objects.all():
-            if self.job.debug:
+            if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading Prefix: {_pf.prefix}.")
             ip_net = ipaddress.ip_network(_pf.prefix)
             new_pf = self.subnet(
@@ -386,7 +386,7 @@ class NautobotAdapter(DiffSync):
             try:
                 self.add(new_ip)
             except ObjectAlreadyExists as err:
-                if self.job.debug:
+                if self.job.kwargs.get("debug"):
                     self.job.log_debug(
                         message=f"Duplicate IP Address {_ip.address} found and won't be imported. Validate the duplicate address is accurate. {err}"
                     )
@@ -408,7 +408,7 @@ class NautobotAdapter(DiffSync):
                 )
                 self.add(_vlan)
             except ObjectAlreadyExists as err:
-                if self.job.debug:
+                if self.job.kwargs.get("debug"):
                     self.job.log_warning(message=err)
 
     def load_cables(self):
