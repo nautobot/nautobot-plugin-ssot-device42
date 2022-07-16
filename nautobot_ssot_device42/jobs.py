@@ -10,8 +10,8 @@ from requests import HTTPError
 from diffsync import DiffSyncFlags
 from diffsync.exceptions import ObjectNotCreated
 from nautobot_ssot_device42.constant import PLUGIN_CFG
-from nautobot_ssot_device42.diffsync.from_d42.device42 import Device42Adapter
-from nautobot_ssot_device42.diffsync.from_d42.nautobot import NautobotAdapter
+from nautobot_ssot_device42.diffsync.adapters.device42 import Device42Adapter
+from nautobot_ssot_device42.diffsync.adapters.nautobot import NautobotAdapter
 from nautobot_ssot_device42.utils.device42 import Device42API
 
 from .diff import CustomOrderingDiff

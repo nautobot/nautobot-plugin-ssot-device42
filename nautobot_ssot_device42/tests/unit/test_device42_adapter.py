@@ -7,7 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from nautobot.utilities.testing import TransactionTestCase
 from nautobot.extras.models import Job, JobResult
 from parameterized import parameterized
-from nautobot_ssot_device42.diffsync.from_d42.device42 import Device42Adapter, get_circuit_status
+from nautobot_ssot_device42.diffsync.adapters.device42 import Device42Adapter, get_circuit_status
 from nautobot_ssot_device42.jobs import Device42DataSource
 
 
