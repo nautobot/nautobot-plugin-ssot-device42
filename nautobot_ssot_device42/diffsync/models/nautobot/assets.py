@@ -1,13 +1,10 @@
 """DiffSyncModel Asset subclasses for Nautobot Device42 data sync."""
 
-from typing import Optional
-from uuid import UUID
-
-from diffsync import DiffSyncModel
 from django.core.exceptions import ValidationError
 from nautobot.dcim.models import Site, RackGroup, Rack, Device, DeviceType, FrontPort, RearPort
 from nautobot.extras.models import Status
 from nautobot_ssot_device42.constant import PLUGIN_CFG
+from nautobot_ssot_device42.diffsync.models.base.assets import PatchPanel, PatchPanelRearPort, PatchPanelFrontPort
 from nautobot_ssot_device42.utils import nautobot
 
 
@@ -68,41 +65,8 @@ def find_rack(diffsync, ids, attrs):
     return pp_rack
 
 
-class PatchPanel(DiffSyncModel):
-    """Device42 Patch Panel model."""
-
-    _modelname = "patchpanel"
-    _identifiers = ("name",)
-    _attributes = (
-        "in_service",
-        "vendor",
-        "model",
-        "size",
-        "depth",
-        "orientation",
-        "position",
-        "num_ports",
-        "building",
-        "room",
-        "rack",
-        "serial_no",
-    )
-    _children = {}
-
-    name: str
-    in_service: bool
-    vendor: str
-    model: str
-    size: float
-    depth: str
-    orientation: str
-    position: Optional[float]
-    num_ports: int
-    building: Optional[str]
-    room: Optional[str]
-    rack: Optional[str]
-    serial_no: Optional[str]
-    uuid: Optional[UUID]
+class NautobotPatchPanel(PatchPanel):
+    """Nautobot Patch Panel model."""
 
     @classmethod
     def create(cls, diffsync, ids, attrs):
@@ -193,18 +157,8 @@ class PatchPanel(DiffSyncModel):
         return self
 
 
-class PatchPanelRearPort(DiffSyncModel):
-    """Device42 Patch Panel RearPort model."""
-
-    _modelname = "patchpanelrearport"
-    _identifiers = ("name", "patchpanel")
-    _attributes = ("port_type",)
-    _children = {}
-
-    name: str
-    patchpanel: str
-    port_type: str
-    uuid: Optional[UUID]
+class NautobotPatchPanelRearPort(PatchPanelRearPort):
+    """Nautobot Patch Panel RearPort model."""
 
     @classmethod
     def create(cls, diffsync, ids, attrs):
@@ -252,18 +206,8 @@ class PatchPanelRearPort(DiffSyncModel):
         return self
 
 
-class PatchPanelFrontPort(DiffSyncModel):
-    """Device42 Patch Panel FrontPort model."""
-
-    _modelname = "patchpanelfrontport"
-    _identifiers = ("name", "patchpanel")
-    _attributes = ("port_type",)
-    _children = {}
-
-    name: str
-    patchpanel: str
-    port_type: str
-    uuid: Optional[UUID]
+class NautobotPatchPanelFrontPort(PatchPanelFrontPort):
+    """Nautobot Patch Panel FrontPort model."""
 
     @classmethod
     def create(cls, diffsync, ids, attrs):

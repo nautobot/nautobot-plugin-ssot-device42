@@ -9,7 +9,7 @@ from diffsync.exceptions import ObjectAlreadyExists, ObjectNotFound
 from django.utils.functional import classproperty
 from django.utils.text import slugify
 from nautobot_ssot_device42.constant import PLUGIN_CFG
-from nautobot_ssot_device42.diffsync.from_d42.models import assets, circuits, dcim, ipam
+from nautobot_ssot_device42.diffsync.models.base import assets, circuits, dcim, ipam
 from nautobot_ssot_device42.utils.device42 import get_facility, get_intf_type, get_netmiko_platform
 from netutils.bandwidth import name_to_bits
 from netutils.dns import is_fqdn_resolvable, fqdn_to_ip

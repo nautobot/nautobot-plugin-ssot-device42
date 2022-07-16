@@ -1,47 +1,30 @@
 """DiffSyncModel Circuit subclasses for Nautobot Device42 data sync."""
 
-from typing import List, Optional
-from uuid import UUID
-
-from diffsync import DiffSyncModel
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
-from nautobot.circuits.models import Circuit as NautobotCircuit
-from nautobot.circuits.models import CircuitTermination as NautobotCT
-from nautobot.circuits.models import Provider as NautobotProvider
-from nautobot.dcim.models import Cable as NautobotCable
-from nautobot.dcim.models import Device as NautobotDevice
-from nautobot.dcim.models import Interface as NautobotInterface
-from nautobot.extras.models import Status as NautobotStatus
+from nautobot.circuits.models import Circuit as OrmCircuit
+from nautobot.circuits.models import CircuitTermination as OrmCT
+from nautobot.circuits.models import Provider as OrmProvider
+from nautobot.dcim.models import Cable as OrmCable
+from nautobot.dcim.models import Device as OrmDevice
+from nautobot.dcim.models import Interface as OrmInterface
+from nautobot.extras.models import Status as OrmStatus
 from nautobot_ssot_device42.constant import INTF_SPEED_MAP, PLUGIN_CFG
+from nautobot_ssot_device42.diffsync.models.base.circuits import Circuit, Provider
 from nautobot_ssot_device42.utils import nautobot
 
 
-class Provider(DiffSyncModel):
-    """Device42 Provider model."""
-
-    _modelname = "provider"
-    _identifiers = ("name",)
-    _attributes = ("notes", "vendor_url", "vendor_acct", "vendor_contact1", "vendor_contact2")
-    _children = {}
-
-    name: str
-    notes: Optional[str]
-    vendor_url: Optional[str]
-    vendor_acct: Optional[str]
-    vendor_contact1: Optional[str]
-    vendor_contact2: Optional[str]
-    tags: Optional[List[str]]
-    uuid: Optional[UUID]
+class NautobotProvider(Provider):
+    """Nautobot Provider model."""
 
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Provider object in Nautobot."""
         try:
-            _provider = NautobotProvider.objects.get(name=ids["name"])
-        except NautobotProvider.DoesNotExist:
-            _provider = NautobotProvider(
+            _provider = OrmProvider.objects.get(name=ids["name"])
+        except OrmProvider.DoesNotExist:
+            _provider = OrmProvider(
                 name=ids["name"],
                 slug=slugify(ids["name"]),
                 account=attrs["vendor_acct"] if attrs.get("vendor_acct") else "",
@@ -63,7 +46,7 @@ class Provider(DiffSyncModel):
 
     def update(self, attrs):
         """Update Provider object in Nautobot."""
-        _prov = NautobotProvider.objects.get(id=self.uuid)
+        _prov = OrmProvider.objects.get(id=self.uuid)
         if attrs.get("notes"):
             _prov.comments = attrs["notes"]
         if attrs.get("vendor_url"):
@@ -87,57 +70,25 @@ class Provider(DiffSyncModel):
         if PLUGIN_CFG.get("delete_on_sync"):
             self.diffsync.job.log_warning(message=f"Provider {self.name} will be deleted.")
             super().delete()
-            provider = NautobotProvider.objects.get(id=self.uuid)
+            provider = OrmProvider.objects.get(id=self.uuid)
             self.diffsync.objects_to_delete["provider"].append(provider)  # pylint: disable=protected-access
         return self
 
 
-class Circuit(DiffSyncModel):
-    """Device42 TelcoCircuit model."""
-
-    _modelname = "circuit"
-    _identifiers = (
-        "circuit_id",
-        "provider",
-    )
-    _attributes = (
-        "notes",
-        "type",
-        "status",
-        "install_date",
-        "origin_int",
-        "origin_dev",
-        "endpoint_int",
-        "endpoint_dev",
-        "bandwidth",
-        "tags",
-    )
-    _children = {}
-    circuit_id: str
-    provider: str
-    notes: Optional[str]
-    type: str
-    status: str
-    install_date: Optional[str]
-    origin_int: Optional[str]
-    origin_dev: Optional[str]
-    endpoint_int: Optional[str]
-    endpoint_dev: Optional[str]
-    bandwidth: Optional[int]
-    tags: Optional[List[str]]
-    uuid: Optional[UUID]
+class NautobotCircuit(Circuit):
+    """Nautobot TelcoCircuit model."""
 
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Circuit object in Nautobot."""
         try:
-            NautobotCircuit.objects.get(cid=ids["circuit_id"])
-        except NautobotCircuit.DoesNotExist:
-            _circuit = NautobotCircuit(
+            OrmCircuit.objects.get(cid=ids["circuit_id"])
+        except OrmCircuit.DoesNotExist:
+            _circuit = OrmCircuit(
                 cid=ids["circuit_id"],
-                provider=NautobotProvider.objects.get(name=ids["provider"]),
+                provider=OrmProvider.objects.get(name=ids["provider"]),
                 type=nautobot.verify_circuit_type(attrs["type"]),
-                status=NautobotStatus.objects.get(name=attrs["status"]),
+                status=OrmStatus.objects.get(name=attrs["status"]),
                 install_date=attrs["install_date"] if attrs.get("install_date") else None,
                 commit_rate=attrs["bandwidth"] if attrs.get("bandwidth") else None,
                 comments=attrs["notes"] if attrs.get("notes") else "",
@@ -158,13 +109,13 @@ class Circuit(DiffSyncModel):
 
     def update(self, attrs):
         """Update Circuit object in Nautobot."""
-        _circuit = NautobotCircuit.objects.get(id=self.uuid)
+        _circuit = OrmCircuit.objects.get(id=self.uuid)
         if attrs.get("notes"):
             _circuit.comments = attrs["notes"]
         if attrs.get("type"):
             _circuit.type = nautobot.verify_circuit_type(attrs["type"])
         if attrs.get("status"):
-            _circuit.status = NautobotStatus.objects.get(name=attrs["status"])
+            _circuit.status = OrmStatus.objects.get(name=attrs["status"])
         if attrs.get("install_date"):
             _circuit.install_date = attrs["install_date"]
         if attrs.get("bandwidth"):
@@ -181,21 +132,21 @@ class Circuit(DiffSyncModel):
         return super().update(attrs)
 
     @staticmethod
-    def connect_circuit_to_device(intf: str, dev: str, term_side: str, circuit: NautobotCircuit):
+    def connect_circuit_to_device(intf: str, dev: str, term_side: str, circuit: OrmCircuit):
         """Method to handle Circuit Termination to a Device.
 
         Args:
             intf (str): Interface of Device to connect Circuit Termination.
             dev (str): Device with respective interface to connect Circuit to.
             term_side (str): Which side of the CircuitTermination this connection is on, A or Z.
-            circuit (NautobotCircuit): The actual Circuit object that the CircuitTermination is connecting to.
+            circuit (OrmCircuit): The actual Circuit object that the CircuitTermination is connecting to.
         """
         try:
-            _intf = NautobotInterface.objects.get(name=intf, device=NautobotDevice.objects.get(name=dev))
+            _intf = OrmInterface.objects.get(name=intf, device=OrmDevice.objects.get(name=dev))
             try:
-                _term = NautobotCT.objects.get(circuit=circuit, term_side=term_side)
-            except NautobotCT.DoesNotExist:
-                _term = NautobotCT(
+                _term = OrmCT.objects.get(circuit=circuit, term_side=term_side)
+            except OrmCT.DoesNotExist:
+                _term = OrmCT(
                     circuit=circuit,
                     term_side=term_side,
                     site=_intf.device.site,
@@ -203,18 +154,18 @@ class Circuit(DiffSyncModel):
                 )
                 _term.validated_save()
             if _intf and not _intf.cable and not _term.cable:
-                new_cable = NautobotCable(
+                new_cable = OrmCable(
                     termination_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
                     termination_a_id=_intf.id,
                     termination_b_type=ContentType.objects.get(app_label="circuits", model="circuittermination"),
                     termination_b_id=_term.id,
-                    status=NautobotStatus.objects.get(name="Connected"),
+                    status=OrmStatus.objects.get(name="Connected"),
                     color=nautobot.get_random_color(),
                 )
                 new_cable.validated_save()
-        except NautobotDevice.DoesNotExist as err:
+        except OrmDevice.DoesNotExist as err:
             print(f"Unable to find {dev} {err}")
-        except NautobotInterface.DoesNotExist as err:
+        except OrmInterface.DoesNotExist as err:
             print(f"Unable to find {intf} {dev} {err}")
 
     def delete(self):
@@ -227,6 +178,6 @@ class Circuit(DiffSyncModel):
         if PLUGIN_CFG.get("delete_on_sync"):
             self.diffsync.job.log_warning(message=f"Circuit {self.circuit_id} will be deleted.")
             super().delete()
-            circuit = NautobotCircuit.objects.get(id=self.uuid)
+            circuit = OrmCircuit.objects.get(id=self.uuid)
             self.diffsync.objects_to_delete["circuit"].append(circuit)  # pylint: disable=protected-access
         return self

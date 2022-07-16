@@ -6,7 +6,7 @@ from diffsync import DiffSync
 from diffsync.exceptions import ObjectAlreadyExists
 from django.db.models import ProtectedError
 from nautobot_ssot_device42.constant import PLUGIN_CFG
-from nautobot_ssot_device42.diffsync.from_d42.models import assets, circuits, dcim, ipam
+from nautobot_ssot_device42.diffsync.models.nautobot import assets, circuits, dcim, ipam
 from nautobot_ssot_device42.utils import nautobot
 from netutils.lib_mapper import ANSIBLE_LIB_MAPPER
 
@@ -42,24 +42,24 @@ class NautobotAdapter(DiffSync):
 
     objects_to_delete = defaultdict(list)
 
-    building = dcim.Building
-    room = dcim.Room
-    rack = dcim.Rack
-    vendor = dcim.Vendor
-    hardware = dcim.Hardware
-    cluster = dcim.Cluster
-    device = dcim.Device
-    port = dcim.Port
-    vrf = ipam.VRFGroup
-    subnet = ipam.Subnet
-    ipaddr = ipam.IPAddress
-    vlan = ipam.VLAN
-    conn = dcim.Connection
-    provider = circuits.Provider
-    circuit = circuits.Circuit
-    patchpanel = assets.PatchPanel
-    patchpanelrearport = assets.PatchPanelRearPort
-    patchpanelfrontport = assets.PatchPanelFrontPort
+    building = dcim.NautobotBuilding
+    room = dcim.NautobotRoom
+    rack = dcim.NautobotRack
+    vendor = dcim.NautobotVendor
+    hardware = dcim.NautobotHardware
+    cluster = dcim.NautobotCluster
+    device = dcim.NautobotDevice
+    port = dcim.NautobotPort
+    vrf = ipam.NautobotVRFGroup
+    subnet = ipam.NautobotSubnet
+    ipaddr = ipam.NautobotIPAddress
+    vlan = ipam.NautobotVLAN
+    conn = dcim.NautobotConnection
+    provider = circuits.NautobotProvider
+    circuit = circuits.NautobotCircuit
+    patchpanel = assets.NautobotPatchPanel
+    patchpanelrearport = assets.NautobotPatchPanelRearPort
+    patchpanelfrontport = assets.NautobotPatchPanelFrontPort
 
     top_level = [
         "building",
