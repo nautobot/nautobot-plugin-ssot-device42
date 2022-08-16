@@ -131,6 +131,7 @@ class Device42Adapter(DiffSync):
         self.device42_hardware_dict = {}
         self.device42 = client
         self.device42_clusters = self.device42.get_cluster_members()
+        self.rack_elevations = {}
 
         # mapping of SiteCode (facility) to Building name
         self.d42_building_sitecode_map = {}
@@ -252,6 +253,13 @@ class Device42Adapter(DiffSync):
             if len(_tags) > 1:
                 _tags.sort()
             if record.get("building") and record.get("room"):
+                if slugify(record["building"]) not in self.rack_elevations:
+                    self.rack_elevations[slugify(record["building"])] = {}
+                if slugify(record["room"]) not in self.rack_elevations[slugify(record["building"])]:
+                    self.rack_elevations[slugify(record["building"])][slugify(record["room"])] = {}
+                self.rack_elevations[slugify(record["building"])][slugify(record["room"])][record["name"]] = {
+                    slot: [] for slot in range(1, record["size"] + 1)
+                }
                 rack = self.rack(
                     name=record["name"],
                     building=record["building"],
@@ -416,12 +424,41 @@ class Device42Adapter(DiffSync):
                             message=f"Device {_record['name']} is not being added. Unable to find Building."
                         )
                     continue
+                # Get size of model to ensure appropriate number of rack Us are filled
+                _position = None
+                try:
+                    model = self.get(self.hardware, sanitize_string(_record["hw_model"]))
+                except ObjectNotFound as err:
+                    if self.job.kwargs.get("debug"):
+                        self.job.log_warning(
+                            message=f"Unable to find hardware model {_record['hw_model']} for {_record['name']} {err}"
+                        )
+                        continue
+                if model:
+                    model_size = int(model.size)
+                    if _record.get("start_at"):
+                        _position = int(_record["start_at"])
+                        for slot in range(_position, model_size + 1):
+                            self.rack_elevations[slugify(_building)][slugify(_record["room"])][_record["rack"]][
+                                slot
+                            ].append(_record["name"][:64])
+                        if (
+                            len(
+                                self.rack_elevations[slugify(_building)][slugify(_record["room"])][_record["rack"]][
+                                    int(_record["start_at"])
+                                ]
+                            )
+                            == 1
+                        ):
+                            _position = int(_record["start_at"])
+                        else:
+                            _position = None
                 _device = self.device(
                     name=_record["name"][:64],
                     building=_building,
                     room=_record["room"] if _record.get("room") else "",
                     rack=_record["rack"] if _record.get("rack") else "",
-                    rack_position=int(_record["start_at"]) if _record.get("start_at") else None,
+                    rack_position=_position,
                     rack_orientation="front" if _record.get("orientation") == 1 else "rear",
                     hardware=sanitize_string(_record["hw_model"]),
                     os=get_netmiko_platform(_record["os"][:100]) if _record.get("os") else "",
