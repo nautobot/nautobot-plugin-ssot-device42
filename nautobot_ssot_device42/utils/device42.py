@@ -335,7 +335,7 @@ class Device42API:  # pylint: disable=too-many-public-methods
 
         return {
             _i["cluster"]: {
-                "members": list(_i["members"].split("%3B ")),
+                "members": sorted(list(_i["members"].split("%3B "))),
                 "is_network": _i["network_device"],
                 "hardware": _i["hardware"],
                 "os": _i["os"],

@@ -357,14 +357,11 @@ class Device42Adapter(DiffSync):
             _tags = cluster_info["tags"] if cluster_info.get("tags") else []
             if PLUGIN_CFG.get("ignore_tag") and PLUGIN_CFG["ignore_tag"] in _tags:
                 return
-            _members = _clus["members"]
-            if len(_members) > 1:
-                _members.sort()
             if len(_tags) > 1:
                 _tags.sort()
             _cluster = self.cluster(
                 name=cluster_info["name"][:64],
-                members=_members,
+                members=_clus["members"],
                 tags=_tags,
                 custom_fields=sorted(cluster_info["custom_fields"], key=lambda d: d["key"]),
                 uuid=None,
