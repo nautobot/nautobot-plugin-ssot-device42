@@ -422,7 +422,7 @@ class Device42Adapter(DiffSync):
                         )
                     continue
                 # Get size of model to ensure appropriate number of rack Us are filled
-                _position = None
+                rack_position = None
                 try:
                     model = self.get(self.hardware, sanitize_string(_record["hw_model"]))
                 except ObjectNotFound as err:
@@ -434,8 +434,8 @@ class Device42Adapter(DiffSync):
                 if model:
                     model_size = int(model.size)
                     if _record.get("start_at"):
-                        _position = int(_record["start_at"])
-                        for slot in range(_position, model_size + 1):
+                        rack_position = int(_record["start_at"])
+                        for slot in range(rack_position, model_size + 1):
                             self.rack_elevations[slugify(_building)][slugify(_record["room"])][_record["rack"]][
                                 slot
                             ].append(_record["name"][:64])
@@ -447,15 +447,15 @@ class Device42Adapter(DiffSync):
                             )
                             == 1
                         ):
-                            _position = int(_record["start_at"])
+                            rack_position = int(_record["start_at"])
                         else:
-                            _position = None
+                            rack_position = None
                 _device = self.device(
                     name=_record["name"][:64],
                     building=_building,
                     room=_record["room"] if _record.get("room") else "",
                     rack=_record["rack"] if _record.get("rack") else "",
-                    rack_position=_position,
+                    rack_position=rack_position,
                     rack_orientation="front" if _record.get("orientation") == 1 else "rear",
                     hardware=sanitize_string(_record["hw_model"]),
                     os=get_netmiko_platform(_record["os"][:100]) if _record.get("os") else "",
