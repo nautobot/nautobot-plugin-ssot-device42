@@ -566,12 +566,7 @@ class Device42Adapter(DiffSync):
         no_vlan_ports_only = []
         for no_vlan_port in no_vlan_ports:
             for vlan_port in vlan_ports:
-                if no_vlan_port["hwaddress"] == vlan_port["hwaddress"] or (
-                    no_vlan_port["port_name"] == vlan_port["port_name"]
-                    and no_vlan_port["device_name"] == vlan_port["device_name"]
-                ):
-                    if self.job.kwargs.get("debug"):
-                        self.job.log_debug(f"Duplicate port {no_vlan_port} found and won't be added.")
+                if no_vlan_port["netport_pk"] == vlan_port["netport_pk"]:
                     break
             else:
                 no_vlan_ports_only.append(no_vlan_port)
