@@ -6,7 +6,6 @@ from typing import Union, List
 
 from diffsync import DiffSync
 from diffsync.exceptions import ObjectAlreadyExists, ObjectNotFound
-from django.utils.functional import classproperty
 from django.utils.text import slugify
 from nautobot_ssot_device42.constant import PLUGIN_CFG
 from nautobot_ssot_device42.diffsync.models.base import assets, circuits, dcim, ipam
@@ -151,14 +150,6 @@ class Device42Adapter(DiffSync):
         self.d42_port_map = self.device42.get_port_pks()
         # mapping of Vendor PK to Vendor info
         self.d42_vendor_map = self.device42.get_vendor_pks()
-
-    @classproperty
-    def _device42_hardwares(self):
-        if not self.device42_hardware_dict:
-            device42_hardware_list = self.device42.api_call(path="api/2.0/hardwares/")["models"]
-            for hardware in device42_hardware_list["models"]:
-                self.device42_hardware_dict[hardware["hardware_id"]] = hardware
-        return self.device42_hardware_dict
 
     def get_building_for_device(self, dev_record: dict) -> str:
         """Method to determine the Building (Site) for a Device.
