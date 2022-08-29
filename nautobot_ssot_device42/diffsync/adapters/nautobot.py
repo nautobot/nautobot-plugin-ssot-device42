@@ -29,7 +29,7 @@ from nautobot.dcim.models import (
 from nautobot.ipam.models import VLAN, VRF, IPAddress, Prefix
 
 try:
-    import nautobot_device_lifecycle_mgmt  # noqa: F401
+    from nautobot_device_lifecycle_mgmt.models import SoftwareLCM
 
     LIFECYCLE_MGMT = True
 except ImportError:
