@@ -117,51 +117,6 @@ def get_or_create_mgmt_intf(intf_name: str, dev: Device) -> Interface:
     return mgmt_intf
 
 
-def set_primary_ip_and_mgmt(ipaddr: IPAddress, dev: Device, intf: Interface):
-    """Method to set primary IP for a Device and mark Interface as management only.
-
-    Args:
-        diffsync (object): DiffSync job for logging.
-        ids (dict): IPAddress object identifier attributes.
-        attrs (dict): IPAddress object attributes.
-        ipaddr (NautobotIPAddress): IPAddress object being created.
-        dev (Device): Device to have primary IP set on.
-        intf (Interface): Interface to set as management.
-    """
-    if ipaddr.assigned_object.device != dev:
-        if ipaddr.family == 6:
-            ipaddr.assigned_object.device.primary_ip6 = None
-        else:
-            ipaddr.assigned_object.device.primary_ip4 = None
-        ipaddr.assigned_object.device.validated_save()
-        ipaddr.assigned_object = intf
-        ipaddr.validated_save()
-    assign_primary(dev=dev, ipaddr=ipaddr)
-    intf.mgmt_only = True
-    intf.validated_save()
-
-
-def assign_primary(dev: Device, ipaddr: IPAddress):
-    """Method to assign IP address as primary to specified device.
-
-    Expects the assigned interface for the IP to belong to the passed Device.
-
-    Args:
-        dev (Device): Device object that the IPAddress is expected to already be assigned to.
-        ipaddr (IPAddress): IPAddress object that is to be primary for `dev`.
-    """
-    # Check if Interface assigned to IP matching DNS query matches Device that is being worked with.
-    if ipaddr.assigned_object.device == dev:
-        if ipaddr.family == 6:
-            dev.primary_ip6 = ipaddr
-        else:
-            dev.primary_ip4 = ipaddr
-        print(f"{ipaddr.address} set to primary on {dev.name}")
-        dev.validated_save()
-    else:
-        print(f"IP Address on device {ipaddr.assigned_object.device} != {dev}")
-
-
 def get_or_create_tag(tag_name: str) -> Tag:
     """Finds or creates a Tag that matches `tag_name`.
 
