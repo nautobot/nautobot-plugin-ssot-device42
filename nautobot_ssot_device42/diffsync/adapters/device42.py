@@ -99,11 +99,11 @@ class Device42Adapter(DiffSync):
     patchpanelrearport = assets.PatchPanelRearPort
 
     top_level = [
-        "building",
-        "vendor",
-        "hardware",
         "vrf",
         "subnet",
+        "vendor",
+        "hardware",
+        "building",
         "vlan",
         "cluster",
         "device",

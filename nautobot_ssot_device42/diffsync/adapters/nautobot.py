@@ -62,11 +62,11 @@ class NautobotAdapter(DiffSync):
     patchpanelfrontport = assets.NautobotPatchPanelFrontPort
 
     top_level = [
-        "building",
-        "vendor",
-        "hardware",
         "vrf",
         "subnet",
+        "vendor",
+        "hardware",
+        "building",
         "vlan",
         "cluster",
         "device",
