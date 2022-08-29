@@ -387,6 +387,7 @@ class NautobotAdapter(DiffSync):
                 custom_fields=nautobot.get_custom_field_dicts(dev.get_custom_fields()),
                 uuid=dev.id,
                 cluster_host=None,
+                vc_position=dev.vc_position,
             )
             if dev.virtual_chassis:
                 _dev.cluster_host = str(dev.virtual_chassis)

@@ -236,3 +236,17 @@ def get_version_from_custom_field(fields: OrderedDict):
         if field.label == "OS Version":
             return value
     return ""
+
+
+def determine_vc_position(vc_map: dict, virtual_chassis: str, device_name: str) -> int:
+    """Determine position of Member Device in Virtual Chassis based on name and other factors.
+
+    Args:
+        vc_map (dict): Dictionary of virtual chassis positions mapped to devices.
+        virtual_chassis (str): Name of the virtual chassis that device is being added to.
+        device_name (str): Name of member device to be added in virtual chassis.
+
+    Returns:
+        int: Position for member device in Virtual Chassis. Will always be position 2 or higher as 1 is master device.
+    """
+    return sorted(vc_map[virtual_chassis]["members"]).index(device_name) + 2

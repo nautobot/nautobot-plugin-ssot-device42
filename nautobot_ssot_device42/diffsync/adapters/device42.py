@@ -10,6 +10,7 @@ from django.utils.text import slugify
 from nautobot_ssot_device42.constant import PLUGIN_CFG
 from nautobot_ssot_device42.diffsync.models.base import assets, circuits, dcim, ipam
 from nautobot_ssot_device42.utils.device42 import get_facility, get_intf_type, get_netmiko_platform
+from nautobot_ssot_device42.utils.nautobot import determine_vc_position
 from netutils.bandwidth import name_to_bits
 from netutils.dns import is_fqdn_resolvable, fqdn_to_ip
 
@@ -376,6 +377,7 @@ class Device42Adapter(DiffSync):
                 custom_fields=sorted(cluster_info["custom_fields"], key=lambda d: d["key"]),
                 rack_position=None,
                 os_version=None,
+                vc_position=1,
                 uuid=None,
             )
             self.add(_device)
@@ -457,21 +459,27 @@ class Device42Adapter(DiffSync):
                     tags=_tags,
                     custom_fields=sorted(_record["custom_fields"], key=lambda d: d["key"]),
                     cluster_host=None,
+                    vc_position=None,
                     uuid=None,
                 )
+                cluster_host = self.get_cluster_host(_record["name"])
+                if cluster_host:
+                    if is_truthy(self.device42_clusters[cluster_host]["is_network"]) is False:
+                        if self.job.kwargs.get("debug"):
+                            self.job.log_warning(
+                                message=f"{cluster_host} has network device members but isn't marked as network. This should be corrected in Device42."
+                            )
+                    _device.cluster_host = cluster_host
+                    if _device.name == cluster_host:
+                        _device.master_device = True
+                        _device.vc_position = 1
+                    else:
+                        _device.vc_position = determine_vc_position(
+                            vc_map=self.device42_clusters, virtual_chassis=cluster_host, device_name=_record["name"]
+                        )
+                if self.job.kwargs.get("debug"):
+                    self.job.log_info(message=f"Device {_record['name']} being added.")
                 try:
-                    cluster_host = self.get_cluster_host(_record["name"])
-                    if cluster_host:
-                        if is_truthy(self.device42_clusters[cluster_host]["is_network"]) is False:
-                            if self.job.kwargs.get("debug"):
-                                self.job.log_warning(
-                                    message=f"{cluster_host} has network device members but isn't marked as network. This should be corrected in Device42."
-                                )
-                        _device.cluster_host = cluster_host
-                        if _device.name == cluster_host:
-                            _device.master_device = True
-                    if self.job.kwargs.get("debug"):
-                        self.job.log_info(message=f"Device {_record['name']} being added.")
                     self.add(_device)
                 except ObjectAlreadyExists as err:
                     if self.job.kwargs.get("debug"):
@@ -483,7 +491,6 @@ class Device42Adapter(DiffSync):
         vlan_ports = self.device42.get_ports_with_vlans()
         no_vlan_ports = self.device42.get_ports_wo_vlans()
         merged_ports = self.filter_ports(vlan_ports, no_vlan_ports)
-        # merged_ports = vlan_ports + no_vlan_ports
         default_cfs = self.device42.get_port_default_custom_fields()
         _cfs = self.device42.get_port_custom_fields()
         for _port in merged_ports:

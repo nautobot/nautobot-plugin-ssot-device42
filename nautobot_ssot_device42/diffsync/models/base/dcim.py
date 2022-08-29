@@ -121,6 +121,7 @@ class Device(DiffSyncModel):
         "cluster_host",
         "master_device",
         "custom_fields",
+        "vc_position",
     )
     _children = {"port": "interfaces"}
     name: str
@@ -138,6 +139,7 @@ class Device(DiffSyncModel):
     tags: Optional[List[str]]
     cluster_host: Optional[str]
     master_device: bool
+    vc_position: Optional[int]
     custom_fields: Optional[List[dict]]
     uuid: Optional[UUID]
 
