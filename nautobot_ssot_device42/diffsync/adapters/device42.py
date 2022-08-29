@@ -981,6 +981,8 @@ class Device42Adapter(DiffSync):
                 _rack = self.d42_rack_map[panel["rack_fk"]]["name"]
             elif panel["calculated_rack_fk"] is not None:
                 _rack = self.d42_rack_map[panel["rack_fk"]]["name"]
+            elif PLUGIN_CFG.get("hostname_mapping") and len(PLUGIN_CFG["hostname_mapping"]) > 0:
+                _building = get_site_from_mapping(device_name=panel["name"])
             if _building is None and _room is None and _rack is None:
                 if self.job.kwargs.get("debug"):
                     self.job.log_debug(
