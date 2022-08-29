@@ -3,6 +3,7 @@
 import re
 from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
@@ -21,9 +22,8 @@ from nautobot.dcim.models import RackGroup as OrmRackGroup
 from nautobot.dcim.models import Site as OrmSite
 from nautobot.dcim.models import VirtualChassis as OrmVC
 from nautobot.extras.choices import CustomFieldTypeChoices
-from nautobot.extras.models import CustomField, Relationship, RelationshipAssociation
+from nautobot.extras.models import CustomField, RelationshipAssociation
 from nautobot.extras.models import Status as OrmStatus
-from nautobot.ipam.models import VLAN as OrmVLAN
 from nautobot_ssot_device42.constant import DEFAULTS, INTF_SPEED_MAP, PLUGIN_CFG
 from nautobot_ssot_device42.diffsync.models.base.dcim import (
     Building,
@@ -53,11 +53,11 @@ class NautobotBuilding(Building):
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Site object in Nautobot."""
-        def_site_status = OrmStatus.objects.get(name=DEFAULTS.get("site_status"))
+        def_site_status = diffsync.status_map[slugify(DEFAULTS.get("site_status"))]
         new_site = OrmSite(
             name=ids["name"],
             slug=slugify(ids["name"]),
-            status=def_site_status,
+            status_id=def_site_status,
             physical_address=attrs["address"] if attrs.get("address") else "",
             latitude=round(Decimal(attrs["latitude"] if attrs["latitude"] else 0.0), 6),
             longitude=round(Decimal(attrs["longitude"] if attrs["longitude"] else 0.0), 6),
@@ -80,7 +80,8 @@ class NautobotBuilding(Building):
                 field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
                 field.content_types.add(ContentType.objects.get_for_model(OrmSite).id)
                 new_site.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
-        new_site.validated_save()
+        diffsync.objects_to_create["sites"].append(new_site)
+        diffsync.site_map[slugify(ids["name"])] = new_site.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -140,7 +141,7 @@ class NautobotRoom(Room):
         new_rg = OrmRackGroup(
             name=ids["name"],
             slug=slugify(ids["name"]),
-            site=OrmSite.objects.get(name=ids["building"]),
+            site_id=diffsync.site_map[slugify(ids["building"])],
             description=attrs["notes"] if attrs.get("notes") else "",
         )
         if attrs.get("custom_fields"):
@@ -153,7 +154,10 @@ class NautobotRoom(Room):
                 field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
                 field.content_types.add(ContentType.objects.get_for_model(OrmRackGroup).id)
                 new_rg.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
-        new_rg.validated_save()
+        diffsync.objects_to_create["rooms"].append(new_rg)
+        if slugify(ids["building"]) not in diffsync.room_map:
+            diffsync.room_map[slugify(ids["building"])] = {}
+        diffsync.room_map[slugify(ids["building"])][slugify(ids["name"])] = new_rg.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -191,13 +195,13 @@ class NautobotRack(Rack):
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Rack object in Nautobot."""
-        _site = OrmSite.objects.get(name=ids["building"])
-        _rg = OrmRackGroup.objects.get(name=ids["room"], site__name=ids["building"])
+        _site = diffsync.site_map[slugify(ids["building"])]
+        _rg = diffsync.room_map[slugify(ids["building"])][slugify(ids["room"])]
         new_rack = OrmRack(
             name=ids["name"],
-            site=_site,
-            group=_rg,
-            status=OrmStatus.objects.get(name=DEFAULTS.get("rack_status")),
+            site_id=_site,
+            group_id=_rg,
+            status_id=diffsync.status_map[slugify(DEFAULTS.get("rack_status"))],
             u_height=attrs["height"] if attrs.get("height") else 1,
             desc_units=not (is_truthy(attrs["numbering_start_from_bottom"])),
         )
@@ -214,7 +218,12 @@ class NautobotRack(Rack):
                 field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
                 field.content_types.add(ContentType.objects.get_for_model(OrmRack).id)
                 new_rack.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
-        new_rack.validated_save()
+        diffsync.objects_to_create["racks"].append(new_rack)
+        if slugify(ids["building"]) not in diffsync.rack_map:
+            diffsync.rack_map[slugify(ids["building"])] = {}
+        if slugify(ids["room"]) not in diffsync.rack_map[slugify(ids["building"])]:
+            diffsync.rack_map[slugify(ids["building"])][slugify(ids["room"])] = {}
+        diffsync.rack_map[slugify(ids["building"])][slugify(ids["room"])][ids["name"]] = new_rack.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -265,8 +274,8 @@ class NautobotVendor(Vendor):
         if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_debug(message=f"Creating Manufacturer {ids['name']}")
         try:
-            OrmManufacturer.objects.get(slug=slugify(ids["name"]))
-        except OrmManufacturer.DoesNotExist:
+            diffsync.vendor_map[slugify(ids["name"])]
+        except KeyError:
             new_manu = OrmManufacturer(
                 name=ids["name"],
                 slug=slugify(ids["name"]),
@@ -281,7 +290,8 @@ class NautobotVendor(Vendor):
                     field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
                     field.content_types.add(ContentType.objects.get_for_model(OrmManufacturer).id)
                     new_manu.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
-            new_manu.validated_save()
+            diffsync.objects_to_create["vendors"].append(new_manu)
+            diffsync.vendor_map[slugify(ids["name"])] = new_manu.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -325,12 +335,12 @@ class NautobotHardware(Hardware):
         if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_debug(message=f"Creating DeviceType {ids['name']}")
         try:
-            OrmDeviceType.objects.get(slug=slugify(ids["name"]))
-        except OrmDeviceType.DoesNotExist:
+            diffsync.devicetype_map[slugify(ids["name"])]
+        except KeyError:
             new_dt = OrmDeviceType(
                 model=ids["name"],
                 slug=slugify(ids["name"]),
-                manufacturer=OrmManufacturer.objects.get(slug=slugify(attrs["manufacturer"])),
+                manufacturer_id=diffsync.vendor_map[slugify(attrs["manufacturer"])],
                 part_number=attrs["part_number"] if attrs.get("part_number") else "",
                 u_height=int(attrs["size"]) if attrs.get("size") else 1,
                 is_full_depth=bool(attrs.get("depth") == "Full Depth"),
@@ -345,7 +355,8 @@ class NautobotHardware(Hardware):
                     field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
                     field.content_types.add(ContentType.objects.get_for_model(OrmDeviceType).id)
                     new_dt.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
-            new_dt.validated_save()
+            diffsync.objects_to_create["devicetypes"].append(new_dt)
+            diffsync.devicetype_map[slugify(ids["name"])] = new_dt.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -416,7 +427,8 @@ class NautobotCluster(Cluster):
                 field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
                 field.content_types.add(ContentType.objects.get_for_model(OrmVC).id)
                 new_vc.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
-        new_vc.validated_save()
+        diffsync.objects_to_create["clusters"].append(new_vc)
+        diffsync.cluster_map[ids["name"]] = new_vc.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -480,138 +492,101 @@ class NautobotDevice(Device):
 
     @staticmethod
     def _get_site(diffsync, ids, attrs):
-        if attrs.get("rack") and attrs.get("room"):
-            try:
-                _site = OrmRack.objects.get(name=attrs["rack"], group__name=attrs["room"]).site
-                return _site
-            except OrmRack.DoesNotExist as err:
-                if diffsync.job.kwargs.get("debug"):
-                    diffsync.job.log_debug(
-                        message=f"Unable to find Site by Rack/Room. {attrs['rack']} {attrs['room']} {err}"
-                    )
-        if attrs.get("building"):
-            try:
-                _site = OrmSite.objects.get(slug=attrs["building"])
-                return _site
-            except OrmSite.DoesNotExist as err:
-                if diffsync.job.kwargs.get("debug"):
-                    diffsync.job.log_debug(message=f"Unable to find Site {attrs['building']}. {err}")
-        else:
+        """Get Site ID from Building name."""
+        try:
+            _site = diffsync.site_map[slugify(attrs["building"])]
+            return _site
+        except KeyError:
             if diffsync.job.kwargs.get("debug"):
-                diffsync.job.log_debug(
-                    message=f"Device {ids['name']} is missing Building or Customer so can't determine Site."
-                )
-            return False
+                diffsync.job.log_debug(message=f"Unable to find Site {attrs['building']}.")
+        return None
 
     @classmethod
     def create(cls, diffsync, ids, attrs):  # pylint: disable=inconsistent-return-statements
         """Create Device object in Nautobot."""
         if attrs["in_service"]:
-            _status = OrmStatus.objects.get(name="Active")
+            _status = diffsync.status_map["active"]
         else:
-            _status = OrmStatus.objects.get(name="Offline")
-        if diffsync.job.debug:
+            _status = diffsync.status_map["offline"]
+        if diffsync.job.kwargs.get("debug"):
             diffsync.job.log_debug(message=f"Creating device {ids['name']}.")
         if attrs.get("tags") and len(attrs["tags"]) > 0:
-            _role = nautobot.verify_device_role(device42.find_device_role_from_tags(tag_list=attrs["tags"]))
-        else:
-            _role = nautobot.verify_device_role(role_name=DEFAULTS.get("device_role"))
-        try:
-            _dt = OrmDeviceType.objects.get(model=attrs["hardware"])
-            _site = cls._get_site(diffsync, ids, attrs)
-            if not _site:
-                diffsync.job.log_debug(message=f"Can't create {ids['name']} as unable to determine Site.")
-                return None
-            new_device = OrmDevice(
-                name=ids["name"][:64],
-                status=_status,
-                site=_site,
-                device_type=_dt,
-                device_role=_role,
-                serial=attrs["serial_no"] if attrs.get("serial_no") else "",
+            _role = nautobot.verify_device_role(
+                diffsync=diffsync, role_name=device42.find_device_role_from_tags(tag_list=attrs["tags"])
             )
-            if attrs.get("rack"):
-                # check that the rack position is available for the Device to be assigned. Unassigns Device if found.
-                devs = OrmDevice.objects.filter(
-                    rack__name=attrs["rack"],
-                    rack__group__name=attrs["room"],
-                    position=attrs["rack_position"],
-                    face=attrs["rack_orientation"],
-                )
-                if len(devs) == 1:
-                    old_dev = devs[0]
-                    old_dev.position = None
-                    old_dev.validated_save()
-                else:
-                    new_device.rack = OrmRack.objects.get(name=attrs["rack"], group__name=attrs["room"])
-                    new_device.position = int(attrs["rack_position"]) if attrs["rack_position"] else None
-                    new_device.face = attrs["rack_orientation"] if attrs["rack_orientation"] else "front"
-            if attrs.get("os"):
-                new_device.platform = nautobot.verify_platform(
-                    platform_name=attrs["os"],
-                    manu=OrmDeviceType.objects.get(model=attrs["hardware"]).manufacturer,
-                )
-            new_device.validated_save()
-            if attrs.get("os_version"):
-                if LIFECYCLE_MGMT and attrs.get("os"):
+        else:
+            _role = nautobot.verify_device_role(diffsync=diffsync, role_name=DEFAULTS.get("device_role"))
+        try:
+            _dt = diffsync.devicetype_map[slugify(attrs["hardware"])]
+        except KeyError:
+            if diffsync.job.kwargs.get("debug"):
+                diffsync.job.log_debug(message=f"Unable to find DeviceType {attrs['hardware']} - {_dt}.")
+            return None
+        _site = cls._get_site(diffsync, ids, attrs)
+        if not _site:
+            diffsync.job.log_debug(message=f"Can't create {ids['name']} as unable to determine Site.")
+            return None
+        new_device = OrmDevice(
+            name=ids["name"][:64],
+            status_id=_status,
+            site_id=_site,
+            device_type_id=_dt,
+            device_role_id=_role,
+            serial=attrs["serial_no"] if attrs.get("serial_no") else "",
+        )
+        if attrs.get("rack"):
+            new_device.rack_id = diffsync.rack_map[slugify(attrs["building"])][slugify(attrs["room"])][attrs["rack"]]
+            new_device.position = int(attrs["rack_position"]) if attrs["rack_position"] else None
+            new_device.face = attrs["rack_orientation"] if attrs["rack_orientation"] else "front"
+        if attrs.get("os"):
+            devicetype = diffsync.get(NautobotHardware, attrs["hardware"])
+            new_device.platform_id = nautobot.verify_platform(
+                diffsync=diffsync,
+                platform_name=attrs["os"],
+                manu=diffsync.vendor_map[slugify(devicetype.manufacturer)],
+            )
+        if attrs.get("os_version"):
+            if LIFECYCLE_MGMT and attrs.get("os"):
+                manu_id = None
+                for dt in diffsync.objects_to_create["devicetypes"]:
+                    if dt.model == attrs["hardware"]:
+                        manu_id = dt.manufacturer_id
+                if manu_id:
                     soft_lcm = cls._add_software_lcm(
-                        os=attrs["os"], version=attrs["os_version"], hardware=attrs["hardware"]
+                        diffsync=diffsync, os=attrs["os"], version=attrs["os_version"], manufacturer=manu_id
                     )
-                    cls._assign_version_to_device(device=new_device, software_lcm=soft_lcm)
-                else:
-                    attrs["custom_fields"].append({"key": "OS Version", "value": attrs["os_version"]})
-            if attrs.get("cluster_host"):
-                try:
-                    _vc = OrmVC.objects.get(name=attrs["cluster_host"])
-                    new_device.virtual_chassis = _vc
-                    if attrs.get("master_device") and attrs["master_device"]:
-                        new_device.vc_position = 1
-                        new_device.validated_save()
-                        _vc.master = new_device
-                        _vc.validated_save()
-                    else:
-                        switch_pos = re.search(r".+-\s([sS]witch)\s?(?P<pos>\d+)", ids["name"])
-                        node_pos = re.search(r".+-\s([nN]ode)\s?(?P<pos>\d+)", ids["name"])
-                        position = 1
-                        if switch_pos or node_pos:
-                            if switch_pos:
-                                position = int(switch_pos.group("pos"))
-                            if node_pos:
-                                position = int(node_pos.group("pos")) + 1
-                        else:
-                            position = len(OrmDevice.objects.filter(virtual_chassis__name=attrs["cluster_host"])) + 1
-                        new_device.vc_position = position + 1
-                except OrmVC.DoesNotExist as err:
-                    if diffsync.job.kwargs.get("debug"):
-                        diffsync.job.log_warning(message=f"Unable to find VC {attrs['cluster_host']} {err}")
-            if attrs.get("tags"):
-                for _tag in nautobot.get_tags(attrs["tags"]):
-                    new_device.tags.add(_tag)
-            if attrs.get("custom_fields"):
-                for _cf in attrs["custom_fields"]:
-                    _cf_dict = {
-                        "name": slugify(_cf["key"]),
-                        "type": CustomFieldTypeChoices.TYPE_TEXT,
-                        "label": _cf["key"],
-                    }
-                    field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
-                    field.content_types.add(ContentType.objects.get_for_model(OrmDevice).id)
-                    new_device.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
+                    cls._assign_version_to_device(diffsync=diffsync, device=new_device.id, software_lcm=soft_lcm)
+            else:
+                attrs["custom_fields"].append({"key": "OS Version", "value": attrs["os_version"]})
+        if attrs.get("cluster_host"):
             try:
-                new_device.validated_save()
-                return super().create(diffsync=diffsync, ids=ids, attrs=attrs)
-            except ValidationError as err:
+                _vc = diffsync.cluster_map[attrs["cluster_host"]]
+                new_device.virtual_chassis_id = _vc
+                if attrs.get("master_device") and attrs["master_device"]:
+                    for vc in diffsync.objects_to_create["clusters"]:
+                        if vc.name == attrs["cluster_host"]:
+                            vc.master = new_device
+            except KeyError:
                 if diffsync.job.kwargs.get("debug"):
-                    diffsync.job.log_debug(message=f"Validation error when creating Device {ids['name']}. {err}")
-        except OrmRack.DoesNotExist:
-            if diffsync.job.kwargs.get("debug"):
-                diffsync.job.log_debug(message=f"Unable to find matching Rack {attrs.get('rack')} for {_site.name}")
-        except OrmDeviceType.DoesNotExist:
-            if diffsync.job.kwargs.get("debug"):
-                diffsync.job.log_debug(
-                    message=f"Unable to find matching DeviceType {attrs['hardware']} for {ids['name']}.",
-                )
-        return None
+                    diffsync.job.log_warning(message=f"Unable to find VC {attrs['cluster_host']}")
+        if attrs.get("vc_position"):
+            new_device.vc_position = attrs["vc_position"]
+        if attrs.get("tags"):
+            for _tag in nautobot.get_tags(attrs["tags"]):
+                new_device.tags.add(_tag)
+        if attrs.get("custom_fields"):
+            for _cf in attrs["custom_fields"]:
+                _cf_dict = {
+                    "name": slugify(_cf["key"]),
+                    "type": CustomFieldTypeChoices.TYPE_TEXT,
+                    "label": _cf["key"],
+                }
+                field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
+                field.content_types.add(ContentType.objects.get_for_model(OrmDevice).id)
+                new_device.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
+        diffsync.objects_to_create["devices"].append(new_device)
+        diffsync.device_map[ids["name"]] = new_device.id
+        return super().create(diffsync=diffsync, ids=ids, attrs=attrs)
 
     def update(self, attrs):
         """Update Device object in Nautobot."""
@@ -645,8 +620,7 @@ class NautobotDevice(Device):
             else:
                 _hardware = _dev.device_type
             _dev.platform = nautobot.verify_platform(
-                platform_name=attrs["os"],
-                manu=_hardware.manufacturer,
+                diffsync=self.diffsync, platform_name=attrs["os"], manu=_hardware.manufacturer.id
             )
         if attrs.get("os_version"):
             if attrs.get("os"):
@@ -658,8 +632,13 @@ class NautobotDevice(Device):
             else:
                 _hardware = self.hardware
             if LIFECYCLE_MGMT:
-                soft_lcm = self._add_software_lcm(os=_os, version=attrs["os_version"], hardware=_hardware)
-                self._assign_version_to_device(device=_dev, software_lcm=soft_lcm)
+                soft_lcm = self._add_software_lcm(
+                    diffsync=self.diffsync,
+                    os=_os,
+                    version=attrs["os_version"],
+                    manufacturer=self.devicetype.manufacturer.id,
+                )
+                self._assign_version_to_device(diffsync=self.diffsync, device=self.uuid, software_lcm=soft_lcm)
             else:
                 attrs["custom_fields"].append(
                     {"key": "OS Version", "value": attrs["os_version"] if attrs.get("os_version") else self.os_version}
@@ -673,6 +652,12 @@ class NautobotDevice(Device):
         if attrs.get("serial_no"):
             _dev.serial = attrs["serial_no"]
         if attrs.get("tags"):
+            if attrs.get("tags") and len(attrs["tags"]) > 0:
+                _dev.role = nautobot.verify_device_role(
+                    diffsync=self.diffsync, role_name=device42.find_device_role_from_tags(tag_list=attrs["tags"])
+                )
+            else:
+                _dev.role = nautobot.verify_device_role(diffsync=self.diffsync, role_name=DEFAULTS.get("device_role"))
             for _tag in nautobot.get_tags(attrs["tags"]):
                 _dev.tags.add(_tag)
         if attrs.get("custom_fields"):
@@ -692,29 +677,17 @@ class NautobotDevice(Device):
             else:
                 _clus_host = self.cluster_host
             try:
-                _vc = OrmVC.objects.get(name=_clus_host)
-                _dev.virtual_chassis = _vc
-                if attrs.get("master_device") and attrs["master_device"]:
-                    _dev.vc_position = 1
-                    _dev.validated_save()
-                    _vc.master = _dev
-                    _vc.validated_save()
-                else:
-                    # switch devices start at 1 so can use that as position
-                    switch_pos = re.search(r".+-\s([sS]witch)\s?(?P<pos>\d+)", self.name)
-                    # node devices start at 0 so need to be incremented by 2 instead of 1
-                    node_pos = re.search(r".+-\s([nN]ode)\s?(?P<pos>\d+)", self.name)
-                    if switch_pos or node_pos:
-                        if switch_pos:
-                            position = int(switch_pos.group("pos"))
-                        if node_pos:
-                            position = int(node_pos.group("pos")) + 1
-                    else:
-                        position = len(OrmDevice.objects.filter(virtual_chassis__name=_clus_host))
-                    _dev.vc_position = position + 1
-            except OrmVC.DoesNotExist as err:
+                _vc = self.diffsync.cluster_map[_clus_host]
+                _dev.virtual_chassis_id = _vc
+                if attrs.get("master_device"):
+                    for vc in self.diffsync.objects_to_create["clusters"]:
+                        if vc.name == attrs["cluster_host"]:
+                            vc.master = _dev
+            except KeyError:
                 if self.diffsync.job.kwargs.get("debug"):
-                    self.diffsync.job.log_warning(message=f"Unable to find VC {_clus_host} {err}")
+                    self.diffsync.job.log_warning(message=f"Unable to find VC {attrs['cluster_host']}")
+        if attrs.get("vc_position"):
+            _dev.vc_position = attrs["vc_position"]
         print(f"Saving Device {self.name} in {_dev.site} {_dev.rack}")
         try:
             _dev.validated_save()
@@ -739,100 +712,110 @@ class NautobotDevice(Device):
         return self
 
     @staticmethod
-    def _add_software_lcm(os: str, version: str, hardware: str):
+    def _add_software_lcm(diffsync: object, os: str, version: str, manufacturer: UUID):
         """Add OS Version as SoftwareLCM if Device Lifecycle Plugin found."""
-        _platform = nautobot.verify_platform(
-            platform_name=os,
-            manu=OrmDeviceType.objects.get(model=hardware).manufacturer,
-        )
+        _platform = nautobot.verify_platform(diffsync=diffsync, platform_name=os, manu=manufacturer)
         try:
-            os_ver = SoftwareLCM.objects.get(device_platform=_platform, version=version)
-        except SoftwareLCM.DoesNotExist:
+            os_ver = diffsync.softwarelcm_map[os][version]
+        except KeyError:
             os_ver = SoftwareLCM(
-                device_platform=_platform,
+                device_platform_id=_platform,
                 version=version,
             )
-            os_ver.validated_save()
+            diffsync.objects_to_create["softwarelcms"].append(os_ver)
+            if os not in diffsync.softwarelcm_map:
+                diffsync.softwarelcm_map[os] = {}
+            diffsync.softwarelcm_map[os][version] = os_ver.id
+            os_ver = os_ver.id
         return os_ver
 
     @staticmethod
-    def _assign_version_to_device(device, software_lcm):
+    def _assign_version_to_device(diffsync, device, software_lcm):
         """Add Relationship between Device and SoftwareLCM."""
         new_assoc = RelationshipAssociation(
-            relationship=Relationship.objects.get(name="Software on Device"),
+            relationship_id=diffsync.relationship_map["Software on Device"],
             source_type=ContentType.objects.get_for_model(SoftwareLCM),
-            source_id=software_lcm.id,
+            source_id=software_lcm,
             destination_type=ContentType.objects.get_for_model(OrmDevice),
-            destination_id=device.id,
+            destination_id=device,
         )
-        try:
-            new_assoc.validated_save()
-        except ValidationError:
-            return None
+        diffsync.objects_to_create["relationshipasscs"].append(new_assoc)
 
 
 class NautobotPort(Port):
     """Nautobot Port model."""
 
+    def find_site(self, diffsync, site_id: UUID):
+        """Find Site name using it's UUID."""
+        for site, obj_id in diffsync.site_map.items():
+            if obj_id == site_id:
+                return site
+
     @classmethod
     def create(cls, diffsync, ids, attrs):  # pylint: disable=inconsistent-return-statements
         """Create Interface object in Nautobot."""
-        try:
-            if ids.get("device"):
-                _dev = OrmDevice.objects.get(name=ids["device"])
-                new_intf = OrmInterface(
-                    name=ids["name"],
-                    device=_dev,
-                    enabled=is_truthy(attrs["enabled"]),
-                    mtu=attrs["mtu"] if attrs.get("mtu") else 1500,
-                    description=attrs["description"],
-                    type=attrs["type"],
-                    mac_address=attrs["mac_addr"][:12] if attrs.get("mac_addr") else None,
-                    mode=attrs["mode"],
-                )
-                if attrs.get("tags"):
-                    for _tag in nautobot.get_tags(attrs["tags"]):
-                        new_intf.tags.add(_tag)
-                if attrs.get("custom_fields"):
-                    for _cf in attrs["custom_fields"]:
-                        _cf_dict = {
-                            "name": slugify(_cf["key"]),
-                            "type": CustomFieldTypeChoices.TYPE_TEXT,
-                            "label": _cf["key"],
-                        }
-                        field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
-                        field.content_types.add(ContentType.objects.get_for_model(OrmInterface).id)
-                        new_intf.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
-                new_intf.validated_save()
-                try:
-                    if attrs.get("vlans"):
-                        if attrs["mode"] == "access" and len(attrs["vlans"]) == 1:
-                            _vlan = attrs["vlans"][0]
-                            vlan_found = OrmVLAN.objects.filter(
-                                name=_vlan["vlan_name"], vid=_vlan["vlan_id"], site=_dev.site
+        if ids.get("device"):
+            try:
+                _dev = diffsync.device_map[ids["device"]]
+            except KeyError:
+                if diffsync.job.kwargs.get("debug"):
+                    diffsync.job.log_warning(
+                        message=f"Attempting to create {ids['name']} for {ids['device']} failed as {ids['device']} doesn't exist."
+                    )
+                return None
+            new_intf = OrmInterface(
+                name=ids["name"],
+                device_id=_dev,
+                enabled=is_truthy(attrs["enabled"]),
+                mtu=attrs["mtu"] if attrs.get("mtu") else 1500,
+                description=attrs["description"],
+                type=attrs["type"],
+                mac_address=attrs["mac_addr"][:12] if attrs.get("mac_addr") else None,
+                mode=attrs["mode"],
+            )
+            if attrs.get("tags"):
+                for _tag in nautobot.get_tags(attrs["tags"]):
+                    new_intf.tags.add(_tag)
+            if attrs.get("custom_fields"):
+                for _cf in attrs["custom_fields"]:
+                    _cf_dict = {
+                        "name": slugify(_cf["key"]),
+                        "type": CustomFieldTypeChoices.TYPE_TEXT,
+                        "label": _cf["key"],
+                    }
+                    field, _ = CustomField.objects.get_or_create(name=slugify(_cf_dict["name"]), defaults=_cf_dict)
+                    field.content_types.add(ContentType.objects.get_for_model(OrmInterface).id)
+                    new_intf.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
+            if attrs.get("vlans"):
+                site_name = None
+                for dev in diffsync.objects_to_create["devices"]:
+                    if dev.name == ids["device"]:
+                        site_name = cls.find_site(cls, diffsync=diffsync, site_id=dev.site_id)
+                if attrs["mode"] == "access" and len(attrs["vlans"]) == 1 and site_name:
+                    _vlan = attrs["vlans"][0]
+                    try:
+                        new_intf.untagged_vlan_id = diffsync.vlan_map[site_name][str(_vlan["vlan_id"])]
+                    except KeyError:
+                        if diffsync.job.kwargs.get("debug"):
+                            diffsync.job.log_warning(
+                                message=f"Unable to find access VLAN {_vlan['vlan_id']} in {site_name}."
                             )
-                            if vlan_found:
-                                new_intf.untagged_vlan = vlan_found[0]
-                        else:
-                            tagged_vlans = []
-                            for _vlan in attrs["vlans"]:
-                                tagged_vlan = OrmVLAN.objects.filter(
-                                    name=_vlan["vlan_name"], vid=_vlan["vlan_id"], site=_dev.site
+                elif site_name:
+                    for _vlan in attrs["vlans"]:
+                        try:
+                            tagged_vlan = diffsync.vlan_map[site_name][str(_vlan["vlan_id"])]
+                            if tagged_vlan:
+                                new_intf.tagged_vlans.add(tagged_vlan)
+                        except KeyError:
+                            if diffsync.job.kwargs.get("debug"):
+                                diffsync.job.log_warning(
+                                    message=f"Unable to find trunked VLAN {_vlan['vlan_id']} in {site_name}."
                                 )
-                                if not tagged_vlan:
-                                    tagged_vlan = OrmVLAN.objects.filter(name=_vlan["vlan_name"], vid=_vlan["vlan_id"])
-                                if tagged_vlan:
-                                    tagged_vlans.append(tagged_vlan[0])
-                            new_intf.tagged_vlans.set(tagged_vlans)
-                except OrmVLAN.DoesNotExist as err:
-                    if diffsync.job.kwargs.get("debug"):
-                        diffsync.job.log_debug(message=f"{err}: {_vlan['vlan_name']} {_vlan['vlan_id']}")
-                new_intf.validated_save()
-                return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
-        except OrmDevice.DoesNotExist as err:
-            if diffsync.job.kwargs.get("debug"):
-                diffsync.job.log_warning(message=f"{ids['name']} doesn't exist. {err}")
-                return False
+            diffsync.objects_to_create["ports"].append(new_intf)
+            if ids["device"] not in diffsync.port_map:
+                diffsync.port_map[ids["device"]] = {}
+            diffsync.port_map[ids["device"]][ids["name"]] = new_intf.id
+            return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
         """Update Interface object in Nautobot."""
@@ -867,28 +850,34 @@ class NautobotPort(Port):
                 _mode = attrs["mode"]
             else:
                 _mode = self.mode
-            if _mode == "access" and len(attrs["vlans"]) == 1:
-                _vlan = attrs["vlans"][0]
-                vlan_found = OrmVLAN.objects.filter(
-                    name=_vlan["vlan_name"],
-                    vid=_vlan["vlan_id"],
-                    site=OrmDevice.objects.get(name=self.device).site,
-                )
-                if vlan_found:
-                    _port.untagged_vlan = vlan_found[0]
+            if attrs.get("device"):
+                _device = attrs["device"]
             else:
-                tagged_vlans = []
+                _device = self.device
+            site_name = None
+            for dev in self.diffsync.objects_to_create["devices"]:
+                if dev.name == _device:
+                    site_name = self.find_site(diffsync=self.diffsync, site_id=dev.site_id)
+            if _mode == "access" and len(attrs["vlans"]) == 1 and site_name:
+                _vlan = attrs["vlans"][0]
+                try:
+                    _port.untagged_vlan_id = self.diffsync.vlan_map[site_name][str(_vlan["vlan_id"])]
+                except KeyError:
+                    if self.diffsync.job.kwargs.get("debug"):
+                        self.diffsync.job.log_warning(
+                            message=f"Unable to find VLAN {_vlan['vlan_name']} {_vlan['vlan_id']} in {site_name}."
+                        )
+            elif site_name:
                 for _vlan in attrs["vlans"]:
-                    tagged_vlan = OrmVLAN.objects.filter(
-                        name=_vlan["vlan_name"],
-                        vid=_vlan["vlan_id"],
-                        site=OrmDevice.objects.get(name=self.device).site,
-                    )
-                    if not tagged_vlan:
-                        tagged_vlan = OrmVLAN.objects.filter(name=_vlan["vlan_name"], vid=_vlan["vlan_id"])
-                    if tagged_vlan:
-                        tagged_vlans.append(tagged_vlan[0])
-                _port.tagged_vlans.set(tagged_vlans)
+                    try:
+                        tagged_vlan = self.diffsync.vlan_map[site_name][str(_vlan["vlan_id"])]
+                        if tagged_vlan:
+                            _port.tagged_vlans_id.add(tagged_vlan)
+                    except KeyError:
+                        if self.diffsync.job.kwargs.get("debug"):
+                            self.diffsync.job.log_warning(
+                                message=f"Unable to find VLAN {_vlan['vlan_name']} {_vlan['vlan_id']} in {site_name}."
+                            )
         try:
             _port.validated_save()
             return super().update(attrs)
@@ -920,7 +909,13 @@ class NautobotConnection(Connection):
         elif attrs["src_type"] == "interface" and attrs["dst_type"] == "interface":
             new_cable = cls.get_device_connections(cls, diffsync=diffsync, ids=ids)
         if new_cable:
-            new_cable.validated_save()
+            diffsync.objects_to_create["cables"].append(new_cable)
+            if ids["src_device"] not in diffsync.cable_map:
+                diffsync.cable_map[ids["src_device"]] = {}
+            if ids["dst_device"] not in diffsync.cable_map:
+                diffsync.cable_map[ids["dst_device"]] = {}
+            diffsync.cable_map[ids["src_device"]][ids["src_port"]] = new_cable.id
+            diffsync.cable_map[ids["dst_device"]][ids["dst_port"]] = new_cable.id
             return super().create(diffsync=diffsync, ids=ids, attrs=attrs)
         else:
             return None
@@ -939,45 +934,33 @@ class NautobotConnection(Connection):
         _intf, circuit = None, None
         if attrs["src_type"] == "interface":
             try:
-                _intf = OrmInterface.objects.get(device__name=ids["src_device"], name=ids["src_port"])
-                circuit = OrmCircuit.objects.get(cid=ids["dst_device"])
-            except OrmInterface.DoesNotExist as err:
+                _intf = diffsync.port_map[ids["src_device"]][ids["src_port"]]
+                circuit = diffsync.circuit_map[ids["dst_device"]]
+            except KeyError:
                 if diffsync.job.kwargs.get("debug"):
                     diffsync.job.log_warning(
-                        message=f"Unable to find source port for {ids['src_device']}: {ids['src_port']} to connect to Circuit {ids['dst_device']} {err}"
+                        message=f"Unable to find source port for {ids['src_device']}: {ids['src_port']} to connect to Circuit {ids['dst_device']}"
                     )
-                return None
-            except OrmCircuit.DoesNotExist as err:
-                if diffsync.job.kwargs.get("debug"):
-                    diffsync.job.log_warning(message=f"Unable to find Circuit {ids['dst_device']} {err}")
                 return None
         elif attrs["src_type"] == "patch panel":
             try:
                 _intf = OrmFrontPort.objects.get(device__name=ids["src_device"], name=ids["src_port"])
-                circuit = OrmCircuit.objects.get(cid=ids["dst_device"])
-            except OrmFrontPort.DoesNotExist as err:
+                circuit = diffsync.circuit_map[ids["dst_device"]]
+            except KeyError:
                 if diffsync.job.kwargs.get("debug"):
                     diffsync.job.log_warning(
-                        message=f"Unable to find patch panel port for {ids['src_device']}: {ids['src_port']} to connect to Circuit {ids['dst_device']} {err}"
+                        message=f"Unable to find patch panel port for {ids['src_device']}: {ids['src_port']} to connect to Circuit {ids['dst_device']}"
                     )
-                return None
-            except OrmCircuit.DoesNotExist as err:
-                if diffsync.job.kwargs.get("debug"):
-                    diffsync.job.log_warning(message=f"Unable to find Circuit {ids['dst_device']} {err}")
                 return None
         if attrs["dst_type"] == "interface":
             try:
-                circuit = OrmCircuit.objects.get(cid=ids["src_device"])
-                _intf = OrmInterface.objects.get(device__name=ids["dst_device"], name=ids["dst_port"])
-            except OrmInterface.DoesNotExist as err:
+                circuit = diffsync.circuit_map[ids["src_device"]]
+                _intf = diffsync.port_map[ids["dst_device"]][ids["dst_port"]]
+            except KeyError:
                 if diffsync.job.kwargs.get("debug"):
                     diffsync.job.log_warning(
-                        message=f"Unable to find destination port for {ids['dst_device']}: {ids['dst_port']} to connect to Circuit {ids['src_device']} {err}"
+                        message=f"Unable to find destination port for {ids['dst_device']}: {ids['dst_port']} to connect to Circuit {ids['src_device']}"
                     )
-                return None
-            except OrmCircuit.DoesNotExist as err:
-                if diffsync.job.kwargs.get("debug"):
-                    diffsync.job.log_warning(message=f"Unable to find Circuit {ids['dst_device']} {err}")
                 return None
         elif attrs["dst_type"] == "patch panel":
             try:
@@ -1039,36 +1022,28 @@ class NautobotConnection(Connection):
         """
         _src_port, _dst_port = None, None
         try:
-            if ids.get("src_port_mac") and ids["src_port_mac"] != ids.get("dst_port_mac"):
-                _src_port = OrmInterface.objects.get(mac_address=ids["src_port_mac"])
-        except (OrmInterface.DoesNotExist, OrmInterface.MultipleObjectsReturned):
-            try:
-                _src_port = OrmInterface.objects.get(device__name=ids["src_device"], name=ids["src_port"])
-            except OrmInterface.DoesNotExist as err:
-                if diffsync.job.kwargs.get("debug"):
-                    diffsync.job.log_warning(
-                        message=f"Unable to find source port for {ids['src_device']}: {ids['src_port']} {ids['src_port_mac']} {err}"
-                    )
-                return None
+            _src_port = diffsync.port_map[ids["src_device"]][ids["src_port"]]
+        except KeyError:
+            if diffsync.job.kwargs.get("debug"):
+                diffsync.job.log_warning(
+                    message=f"Unable to find source port for {ids['src_device']}: {ids['src_port']} {ids['src_port_mac']}"
+                )
+            return None
         try:
-            if ids.get("dst_port_mac") and ids["dst_port_mac"] != ids.get("src_port_mac"):
-                _dst_port = OrmInterface.objects.get(mac_address=ids["dst_port_mac"])
-        except (OrmInterface.DoesNotExist, OrmInterface.MultipleObjectsReturned):
-            try:
-                _dst_port = OrmInterface.objects.get(device__name=ids["dst_device"], name=ids["dst_port"])
-            except OrmInterface.DoesNotExist:
-                if diffsync.job.kwargs.get("debug"):
-                    diffsync.job.log_warning(
-                        message=f"Unable to find destination port for {ids['dst_device']}: {ids['dst_port']} {ids['dst_port_mac']}"
-                    )
-                return None
-        if (_src_port and not _src_port.cable) and (_dst_port and not _dst_port.cable):
+            _dst_port = diffsync.port_map[ids["dst_device"]][ids["dst_port"]]
+        except KeyError:
+            if diffsync.job.kwargs.get("debug"):
+                diffsync.job.log_warning(
+                    message=f"Unable to find destination port for {ids['dst_device']}: {ids['dst_port']} {ids['dst_port_mac']}"
+                )
+            return None
+        if _src_port and _dst_port:
             new_cable = OrmCable(
                 termination_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
-                termination_a_id=_src_port.id,
+                termination_a_id=_src_port,
                 termination_b_type=ContentType.objects.get(app_label="dcim", model="interface"),
-                termination_b_id=_dst_port.id,
-                status=OrmStatus.objects.get(name="Connected"),
+                termination_b_id=_dst_port,
+                status_id=diffsync.status_map["connected"],
                 color=nautobot.get_random_color(),
             )
             return new_cable

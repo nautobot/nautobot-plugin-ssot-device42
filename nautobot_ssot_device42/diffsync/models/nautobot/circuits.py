@@ -7,11 +7,10 @@ from nautobot.circuits.models import Circuit as OrmCircuit
 from nautobot.circuits.models import CircuitTermination as OrmCT
 from nautobot.circuits.models import Provider as OrmProvider
 from nautobot.dcim.models import Cable as OrmCable
-from nautobot.dcim.models import Device as OrmDevice
-from nautobot.dcim.models import Interface as OrmInterface
 from nautobot.extras.models import Status as OrmStatus
 from nautobot_ssot_device42.constant import INTF_SPEED_MAP, PLUGIN_CFG
 from nautobot_ssot_device42.diffsync.models.base.circuits import Circuit, Provider
+from nautobot_ssot_device42.diffsync.models.nautobot.dcim import NautobotDevice
 from nautobot_ssot_device42.utils import nautobot
 
 
@@ -22,8 +21,8 @@ class NautobotProvider(Provider):
     def create(cls, diffsync, ids, attrs):
         """Create Provider object in Nautobot."""
         try:
-            _provider = OrmProvider.objects.get(name=ids["name"])
-        except OrmProvider.DoesNotExist:
+            _provider = diffsync.provider_map[slugify(ids["name"])]
+        except KeyError:
             _provider = OrmProvider(
                 name=ids["name"],
                 slug=slugify(ids["name"]),
@@ -37,7 +36,8 @@ class NautobotProvider(Provider):
                 for _tag in nautobot.get_tags(attrs["tags"]):
                     _provider.tags.add(_tag)
             try:
-                _provider.validated_save()
+                diffsync.objects_to_create["providers"].append(_provider)
+                diffsync.provider_map[slugify(ids["name"])] = _provider.id
                 return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
             except ValidationError as err:
                 if diffsync.job.kwargs.get("debug"):
@@ -82,13 +82,13 @@ class NautobotCircuit(Circuit):
     def create(cls, diffsync, ids, attrs):
         """Create Circuit object in Nautobot."""
         try:
-            OrmCircuit.objects.get(cid=ids["circuit_id"])
-        except OrmCircuit.DoesNotExist:
+            diffsync.circuit_map[ids["circuit_id"]]
+        except KeyError:
             _circuit = OrmCircuit(
                 cid=ids["circuit_id"],
-                provider=OrmProvider.objects.get(name=ids["provider"]),
+                provider_id=diffsync.provider_map[slugify(ids["provider"])],
                 type=nautobot.verify_circuit_type(attrs["type"]),
-                status=OrmStatus.objects.get(name=attrs["status"]),
+                status_id=diffsync.status_map[slugify(attrs["status"])],
                 install_date=attrs["install_date"] if attrs.get("install_date") else None,
                 commit_rate=attrs["bandwidth"] if attrs.get("bandwidth") else None,
                 comments=attrs["notes"] if attrs.get("notes") else "",
@@ -96,14 +96,28 @@ class NautobotCircuit(Circuit):
             if attrs.get("tags"):
                 for _tag in nautobot.get_tags(attrs["tags"]):
                     _circuit.tags.add(_tag)
-            _circuit.validated_save()
+            diffsync.objects_to_create["circuits"].append(_circuit)
             if attrs.get("origin_int") and attrs.get("origin_dev"):
+                if attrs["origin_dev"] not in diffsync.circuit_map:
+                    diffsync.circuit_map[attrs["origin_dev"]] = {}
+                diffsync.circuit_map[attrs["origin_dev"]][attrs["origin_int"]] = _circuit.id
                 cls.connect_circuit_to_device(
-                    intf=attrs["origin_int"], dev=attrs["origin_dev"], term_side="A", circuit=_circuit
+                    diffsync=diffsync,
+                    intf=attrs["origin_int"],
+                    dev=attrs["origin_dev"],
+                    term_side="A",
+                    circuit=_circuit,
                 )
             if attrs.get("endpoint_int") and attrs.get("endpoint_dev"):
+                if attrs["endpoint_dev"] not in diffsync.circuit_map:
+                    diffsync.circuit_map[attrs["endpoint_dev"]] = {}
+                diffsync.circuit_map[attrs["endpoint_dev"]][attrs["endpoint_int"]] = _circuit.id
                 cls.connect_circuit_to_device(
-                    intf=attrs["endpoint_int"], dev=attrs["endpoint_dev"], term_side="Z", circuit=_circuit
+                    diffsync=diffsync,
+                    intf=attrs["endpoint_int"],
+                    dev=attrs["endpoint_dev"],
+                    term_side="Z",
+                    circuit=_circuit,
                 )
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
@@ -132,41 +146,45 @@ class NautobotCircuit(Circuit):
         return super().update(attrs)
 
     @staticmethod
-    def connect_circuit_to_device(intf: str, dev: str, term_side: str, circuit: OrmCircuit):
+    def connect_circuit_to_device(diffsync, intf: str, dev: str, term_side: str, circuit: OrmCircuit):
         """Method to handle Circuit Termination to a Device.
 
         Args:
+            diffsync (obj): DiffSync Job for maps.
             intf (str): Interface of Device to connect Circuit Termination.
             dev (str): Device with respective interface to connect Circuit to.
             term_side (str): Which side of the CircuitTermination this connection is on, A or Z.
             circuit (OrmCircuit): The actual Circuit object that the CircuitTermination is connecting to.
         """
         try:
-            _intf = OrmInterface.objects.get(name=intf, device=OrmDevice.objects.get(name=dev))
+            _intf = diffsync.port_map[dev][intf]
             try:
-                _term = OrmCT.objects.get(circuit=circuit, term_side=term_side)
-            except OrmCT.DoesNotExist:
+                _term = diffsync.circuit_map[dev][intf]
+            except KeyError:
+                _site = diffsync.get(NautobotDevice, dev)
+                _site = diffsync.site_map[slugify(_site.name)]
                 _term = OrmCT(
-                    circuit=circuit,
+                    circuit_id=circuit,
                     term_side=term_side,
-                    site=_intf.device.site,
+                    site_id=_site,
                     port_speed=INTF_SPEED_MAP[_intf.type],
                 )
-                _term.validated_save()
-            if _intf and not _intf.cable and not _term.cable:
+                diffsync.objects_to_create["circuits"].append(_term)
+            if _intf and _term:
                 new_cable = OrmCable(
                     termination_a_type=ContentType.objects.get(app_label="dcim", model="interface"),
-                    termination_a_id=_intf.id,
+                    termination_a_id=_intf,
                     termination_b_type=ContentType.objects.get(app_label="circuits", model="circuittermination"),
-                    termination_b_id=_term.id,
-                    status=OrmStatus.objects.get(name="Connected"),
+                    termination_b_id=_term,
+                    status_id=diffsync.status_map["connected"],
                     color=nautobot.get_random_color(),
                 )
-                new_cable.validated_save()
-        except OrmDevice.DoesNotExist as err:
-            print(f"Unable to find {dev} {err}")
-        except OrmInterface.DoesNotExist as err:
-            print(f"Unable to find {intf} {dev} {err}")
+                diffsync.objects_to_create["cables"].append(new_cable)
+                if dev not in diffsync.cable_map:
+                    diffsync.cable_map[dev] = {}
+                diffsync.cable_map[dev][intf] = new_cable.id
+        except KeyError:
+            print(f"Unable to find {dev}")
 
     def delete(self):
         """Delete Provider object from Nautobot.

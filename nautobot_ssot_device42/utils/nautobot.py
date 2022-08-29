@@ -1,14 +1,14 @@
 """Utility functions for Nautobot ORM."""
 from typing import List, OrderedDict
+from uuid import UUID
 
 import random
 from django.utils.text import slugify
 from netutils.lib_mapper import ANSIBLE_LIB_MAPPER_REVERSE, NAPALM_LIB_MAPPER_REVERSE
 from taggit.managers import TaggableManager
 from nautobot.circuits.models import CircuitType
-from nautobot.dcim.models import Device, DeviceRole, Interface, Manufacturer, Platform
+from nautobot.dcim.models import Device, DeviceRole, Interface, Platform
 from nautobot.extras.models import Tag, Relationship
-from nautobot.ipam.models import IPAddress
 
 try:
     from nautobot_device_lifecycle_mgmt.models import SoftwareLCM
@@ -28,35 +28,39 @@ def get_random_color() -> str:
     return f"{'%06x' % random.randint(0, 0xFFFFFF)}"  # pylint: disable=consider-using-f-string
 
 
-def verify_device_role(role_name: str, role_color: str = None) -> DeviceRole:
+def verify_device_role(diffsync, role_name: str, role_color: str = None) -> UUID:
     """Verifies DeviceRole object exists in Nautobot. If not, creates it.
 
     Args:
+        diffsync (obj): DiffSync Job object.
         role_name (str): Name of role to verify.
         role_color (str): Color of role to verify. Must be hex code format.
 
     Returns:
-        DeviceRole: Created DeviceRole object.
+        UUID: ID of found or created DeviceRole object.
     """
     if not role_color:
         role_color = get_random_color()
     try:
-        role_obj = DeviceRole.objects.get(slug=slugify(role_name))
-    except DeviceRole.DoesNotExist:
+        role_obj = diffsync.devicerole_map[slugify(role_name)]
+    except KeyError:
         role_obj = DeviceRole(name=role_name, slug=slugify(role_name), color=role_color)
-        role_obj.validated_save()
+        diffsync.objects_to_create["deviceroles"].append(role_obj)
+        diffsync.devicerole_map[slugify(role_name)] = role_obj.id
+        role_obj = role_obj.id
     return role_obj
 
 
-def verify_platform(platform_name: str, manu: str) -> Platform:
+def verify_platform(diffsync, platform_name: str, manu: str) -> UUID:
     """Verifies Platform object exists in Nautobot. If not, creates it.
 
     Args:
+        diffsync (obj): DiffSync Job with maps.
         platform_name (str): Name of platform to verify.
         manu (str): Name of platform manufacturer.
 
     Returns:
-        DeviceRole: Created DeviceRole object.
+        UUID: UUID for found or created DeviceRole object.
     """
     if ANSIBLE_LIB_MAPPER_REVERSE.get(platform_name):
         _name = ANSIBLE_LIB_MAPPER_REVERSE[platform_name]
@@ -70,15 +74,17 @@ def verify_platform(platform_name: str, manu: str) -> Platform:
         else:
             napalm_driver = platform_name
     try:
-        platform_obj = Platform.objects.get(slug=slugify(platform_name))
-    except Platform.DoesNotExist:
+        platform_obj = diffsync.platform_map[slugify(platform_name)]
+    except KeyError:
         platform_obj = Platform(
             name=_name,
             slug=slugify(platform_name),
-            manufacturer=Manufacturer.objects.get(name=manu),
+            manufacturer_id=manu,
             napalm_driver=napalm_driver[:50],
         )
-        platform_obj.validated_save()
+        diffsync.objects_to_create["platforms"].append(platform_obj)
+        diffsync.platform_map[slugify(platform_name)] = platform_obj.id
+        platform_obj = platform_obj.id
     return platform_obj
 
 
