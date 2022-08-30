@@ -483,7 +483,7 @@ class NautobotAdapter(DiffSync):
         """Add Nautobot IPAddress objects as DiffSync IPAddress models."""
         for _ip in IPAddress.objects.all():
             self.ipaddr_map[_ip.vrf.slug][str(_ip.address)] = _ip.id
-            if self.job.debug:
+            if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading IPAddress: {_ip.address}.")
             new_ip = self.ipaddr(
                 address=str(_ip.address),
@@ -519,7 +519,7 @@ class NautobotAdapter(DiffSync):
             if vlan.site.slug not in self.vlan_map:
                 self.vlan_map[vlan.site.slug] = {}
             self.vlan_map[vlan.site.slug][str(vlan.vid)] = vlan.id
-            if self.job.debug:
+            if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading VLAN: {vlan.name}.")
             try:
                 _vlan = self.vlan(
