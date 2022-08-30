@@ -20,16 +20,22 @@ class TestNautobotUtils(TransactionTestCase):
 
     def test_determine_vc_position(self):
         vc_map = {
-            "switch_vc_example": [
-                "switch_vc_example - Switch 1",
-                "switch_vc_example - Switch 2",
-            ],
-            "node_vc_example": [
-                "node_vc_example - node0",
-                "node_vc_example - node1",
-                "node_vc_example - node2",
-            ],
-            "firewall_pair_example": ["firewall - FTX123456AB", "firewall - FTX234567AB"],
+            "switch_vc_example": {
+                "members": [
+                    "switch_vc_example - Switch 1",
+                    "switch_vc_example - Switch 2",
+                ],
+            },
+            "node_vc_example": {
+                "members": [
+                    "node_vc_example - node0",
+                    "node_vc_example - node1",
+                    "node_vc_example - node2",
+                ],
+            },
+            "firewall_pair_example": {
+                "members": ["firewall - FTX123456AB", "firewall - FTX234567AB"],
+            },
         }
         sw1_pos = determine_vc_position(
             vc_map=vc_map, virtual_chassis="switch_vc_example", device_name="switch_vc_example - Switch 1"
