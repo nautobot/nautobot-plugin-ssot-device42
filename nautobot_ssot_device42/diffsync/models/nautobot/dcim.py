@@ -791,19 +791,21 @@ class NautobotPort(Port):
                 for dev in diffsync.objects_to_create["devices"]:
                     if dev.name == ids["device"]:
                         site_name = cls.find_site(cls, diffsync=diffsync, site_id=dev.site_id)
-                if attrs["mode"] == "access" and len(attrs["vlans"]) == 1 and site_name:
+                if not site_name:
+                    site_name = "global"
+                if attrs["mode"] == "access" and len(attrs["vlans"]) == 1:
                     _vlan = attrs["vlans"][0]
                     try:
-                        new_intf.untagged_vlan_id = diffsync.vlan_map[site_name][str(_vlan["vlan_id"])]
+                        new_intf.untagged_vlan_id = diffsync.vlan_map[slugify(site_name)][str(_vlan["vlan_id"])]
                     except KeyError:
                         if diffsync.job.kwargs.get("debug"):
                             diffsync.job.log_warning(
                                 message=f"Unable to find access VLAN {_vlan['vlan_id']} in {site_name}."
                             )
-                elif site_name:
+                else:
                     for _vlan in attrs["vlans"]:
                         try:
-                            tagged_vlan = diffsync.vlan_map[site_name][str(_vlan["vlan_id"])]
+                            tagged_vlan = diffsync.vlan_map[slugify(site_name)][str(_vlan["vlan_id"])]
                             if tagged_vlan:
                                 new_intf.tagged_vlans.add(tagged_vlan)
                         except KeyError:
@@ -858,21 +860,23 @@ class NautobotPort(Port):
             for dev in self.diffsync.objects_to_create["devices"]:
                 if dev.name == _device:
                     site_name = self.find_site(diffsync=self.diffsync, site_id=dev.site_id)
-            if _mode == "access" and len(attrs["vlans"]) == 1 and site_name:
+            if not site_name:
+                site_name = "global"
+            if _mode == "access" and len(attrs["vlans"]) == 1:
                 _vlan = attrs["vlans"][0]
                 try:
-                    _port.untagged_vlan_id = self.diffsync.vlan_map[site_name][str(_vlan["vlan_id"])]
+                    _port.untagged_vlan_id = self.diffsync.vlan_map[slugify(site_name)][str(_vlan["vlan_id"])]
                 except KeyError:
                     if self.diffsync.job.kwargs.get("debug"):
                         self.diffsync.job.log_warning(
                             message=f"Unable to find VLAN {_vlan['vlan_name']} {_vlan['vlan_id']} in {site_name}."
                         )
-            elif site_name:
+            else:
                 for _vlan in attrs["vlans"]:
                     try:
-                        tagged_vlan = self.diffsync.vlan_map[site_name][str(_vlan["vlan_id"])]
+                        tagged_vlan = self.diffsync.vlan_map[slugify(site_name)][str(_vlan["vlan_id"])]
                         if tagged_vlan:
-                            _port.tagged_vlans_id.add(tagged_vlan)
+                            _port.tagged_vlans.add(tagged_vlan)
                     except KeyError:
                         if self.diffsync.job.kwargs.get("debug"):
                             self.diffsync.job.log_warning(

@@ -463,7 +463,7 @@ class NautobotAdapter(DiffSync):
     def load_vrfs(self):
         """Add Nautobot VRF objects as DiffSync VRFGroup models."""
         for vrf in VRF.objects.all():
-            self.vrf_map[vrf.slug] = vrf.id
+            self.vrf_map[vrf.name] = vrf.id
             if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading VRF: {vrf.name}.")
             _vrf = self.vrf(
@@ -478,7 +478,13 @@ class NautobotAdapter(DiffSync):
     def load_prefixes(self):
         """Add Nautobot Prefix objects as DiffSync Subnet models."""
         for _pf in Prefix.objects.all():
-            self.prefix_map[_pf.network_address] = _pf.id
+            if _pf.vrf:
+                vrf_name = _pf.vrf.name
+            else:
+                vrf_name = "unknown"
+            if vrf_name not in self.prefix_map:
+                self.prefix_map[vrf_name] = {}
+            self.prefix_map[vrf_name][str(_pf.prefix)] = _pf.id
             if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading Prefix: {_pf.prefix}.")
             ip_net = ipaddress.ip_network(_pf.prefix)
@@ -496,7 +502,15 @@ class NautobotAdapter(DiffSync):
     def load_ip_addresses(self):
         """Add Nautobot IPAddress objects as DiffSync IPAddress models."""
         for _ip in IPAddress.objects.all():
-            self.ipaddr_map[_ip.vrf.slug][str(_ip.address)] = _ip.id
+            if _ip.vrf:
+                vrf_name = _ip.vrf.name
+            else:
+                vrf_name = "global"
+            if vrf_name not in self.ipaddr_map:
+                self.ipaddr_map[vrf_name] = {}
+            if str(_ip.address) not in self.ipaddr_map[vrf_name]:
+                self.ipaddr_map[vrf_name][str(_ip.address)] = {}
+            self.ipaddr_map[vrf_name][str(_ip.address)] = _ip.id
             if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading IPAddress: {_ip.address}.")
             new_ip = self.ipaddr(
@@ -530,9 +544,15 @@ class NautobotAdapter(DiffSync):
     def load_vlans(self):
         """Add Nautobot VLAN objects as DiffSync VLAN models."""
         for vlan in VLAN.objects.all():
-            if vlan.site.slug not in self.vlan_map:
-                self.vlan_map[vlan.site.slug] = {}
-            self.vlan_map[vlan.site.slug][str(vlan.vid)] = vlan.id
+            if vlan.site:
+                site_slug = vlan.site.slug
+            else:
+                site_slug = "global"
+            if site_slug not in self.vlan_map:
+                self.vlan_map[site_slug] = {}
+            if str(vlan.vid) not in self.vlan_map[site_slug]:
+                self.vlan_map[site_slug][str(vlan.vid)] = {}
+            self.vlan_map[site_slug][str(vlan.vid)] = vlan.id
             if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading VLAN: {vlan.name}.")
             try:

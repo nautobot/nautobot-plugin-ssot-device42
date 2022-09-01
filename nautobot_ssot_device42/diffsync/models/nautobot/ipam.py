@@ -39,7 +39,7 @@ class NautobotVRFGroup(VRFGroup):
                 field.content_types.add(ContentType.objects.get_for_model(OrmVRF).id)
                 _vrf.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
         diffsync.objects_to_create["vrfs"].append(_vrf)
-        diffsync.vrf_map[slugify(ids["name"])] = _vrf.id
+        diffsync.vrf_map[ids["name"]] = _vrf.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -85,9 +85,13 @@ class NautobotSubnet(Subnet):
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create Prefix object in Nautobot."""
+        if ids.get("vrf"):
+            vrf_name = ids["vrf"]
+        else:
+            vrf_name = "unknown"
         _pf = OrmPrefix(
             prefix=f"{ids['network']}/{ids['mask_bits']}",
-            vrf_id=diffsync.vrf_map[slugify(ids["vrf"])],
+            vrf_id=diffsync.vrf_map[vrf_name],
             description=attrs["description"],
             status_id=diffsync.status_map["active"],
         )
@@ -105,7 +109,9 @@ class NautobotSubnet(Subnet):
                 field.content_types.add(ContentType.objects.get_for_model(OrmPrefix).id)
                 _pf.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
         diffsync.objects_to_create["prefixes"].append(_pf)
-        diffsync.prefix_map[f"{ids['network']}/{ids['mask_bits']}"] = _pf.id
+        if vrf_name not in diffsync.prefix_map:
+            diffsync.prefix_map[vrf_name] = {}
+        diffsync.prefix_map[vrf_name][f"{ids['network']}/{ids['mask_bits']}"] = _pf.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -169,7 +175,7 @@ class NautobotIPAddress(IPAddress):
         _address = ids["address"]
         _ip = OrmIPAddress(
             address=_address,
-            vrf_id=diffsync.vrf_map[slugify(ids["vrf"])] if ids.get("vrf") else None,
+            vrf_id=diffsync.vrf_map[ids["vrf"]] if ids.get("vrf") else None,
             status_id=diffsync.status_map["active"] if not attrs.get("available") else diffsync.status_map["reserved"],
             description=attrs["label"] if attrs.get("label") else "",
         )
@@ -205,9 +211,13 @@ class NautobotIPAddress(IPAddress):
                 field.content_types.add(ContentType.objects.get_for_model(OrmIPAddress).id)
                 _ip.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
         diffsync.objects_to_create["ipaddrs"].append(_ip)
-        if slugify(ids["vrf"]) not in diffsync.ipaddr_map:
-            diffsync.ipaddr_map[slugify(ids["vrf"])] = {}
-        diffsync.ipaddr_map[slugify(ids["vrf"])][_address] = _ip.id
+        if ids.get("vrf"):
+            vrf_name = ids["vrf"]
+        else:
+            vrf_name = "global"
+        if vrf_name not in diffsync.ipaddr_map:
+            diffsync.ipaddr_map[vrf_name] = {}
+        diffsync.ipaddr_map[vrf_name][_address] = _ip.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
@@ -328,17 +338,21 @@ class NautobotVLAN(VLAN):
     @classmethod
     def create(cls, diffsync, ids, attrs):
         """Create VLAN object in Nautobot."""
-        _site = None
+        _site, _site_name = None, None
         if ids["building"] != "Unknown":
             try:
                 _site = diffsync.site_map[slugify(ids["building"])]
+                _site_name = slugify(ids["building"])
             except KeyError:
                 if diffsync.job.kwargs.get("debug"):
                     diffsync.job.log_debug(message=f"Unable to find Site {ids['building']}.")
+        else:
+            _site = None
+            _site_name = "global"
         try:
-            _vlan = diffsync.vlan_map[slugify(ids["building"])][str(ids["vlan_id"])]
+            _vlan = diffsync.vlan_map[_site_name][str(ids["vlan_id"])]
             diffsync.job.log_warning(
-                message=f"Duplicate VLAN attempting to be created: {ids['building']} {ids['name']} {ids['vlan_id']}"
+                message=f"Duplicate VLAN attempting to be created: {_site_name} {ids['name']} {ids['vlan_id']}"
             )
             return None
         except KeyError:
@@ -362,9 +376,13 @@ class NautobotVLAN(VLAN):
                 field.content_types.add(ContentType.objects.get_for_model(OrmVLAN).id)
                 _vlan.custom_field_data.update({_cf_dict["name"]: _cf["value"]})
         diffsync.objects_to_create["vlans"].append(_vlan)
-        if slugify(ids["building"]) not in diffsync.vlan_map:
-            diffsync.vlan_map[slugify(ids["building"])] = {}
-        diffsync.vlan_map[slugify(ids["building"])][str(ids["vlan_id"])] = _vlan.id
+        if ids["building"]:
+            _site_name = slugify(ids["building"])
+        else:
+            _site_name = "global"
+        if _site_name not in diffsync.vlan_map:
+            diffsync.vlan_map[_site_name] = {}
+        diffsync.vlan_map[_site_name][str(ids["vlan_id"])] = _vlan.id
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def update(self, attrs):
