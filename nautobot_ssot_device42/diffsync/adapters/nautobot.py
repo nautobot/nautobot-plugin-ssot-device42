@@ -259,6 +259,10 @@ class NautobotAdapter(DiffSync):
     def load_rackgroups(self):
         """Add Nautobot RackGroup objects as DiffSync Room models."""
         for _rg in RackGroup.objects.all():
+            if _rg.site.slug not in self.room_map:
+                self.room_map[_rg.site.slug] = {}
+            if _rg.slug not in self.room_map[_rg.site.slug]:
+                self.room_map[_rg.site.slug][_rg.slug] = {}
             self.room_map[_rg.site.slug][_rg.slug] = _rg.id
             room = self.room(
                 name=_rg.name,
@@ -274,6 +278,12 @@ class NautobotAdapter(DiffSync):
     def load_racks(self):
         """Add Nautobot Rack objects as DiffSync Rack models."""
         for rack in Rack.objects.all():
+            if rack.site.slug not in self.rack_map:
+                self.rack_map[rack.site.slug] = {}
+            if rack.group.slug not in self.rack_map[rack.site.slug]:
+                self.rack_map[rack.site.slug][rack.group.slug] = {}
+            if rack.name not in self.rack_map[rack.site.slug][rack.group.slug]:
+                self.rack_map[rack.site.slug][rack.group.slug][rack.name] = {}
             self.rack_map[rack.site.slug][rack.group.slug][rack.name] = rack.id
             try:
                 new_rack = self.rack(
@@ -399,6 +409,10 @@ class NautobotAdapter(DiffSync):
     def load_interfaces(self):
         """Add Nautobot Interface objects as DiffSync Port models."""
         for port in Interface.objects.all():
+            if port.device.name not in self.port_map:
+                self.port_map[port.device.name] = {}
+            if port.name not in self.port_map[port.device.name]:
+                self.port_map[port.device.name][port.name] = {}
             self.port_map[port.device.name][port.name] = port.id
             if self.job.kwargs.get("debug"):
                 self.job.log_debug(message=f"Loading Interface: {port.name} for {port.device}.")
@@ -539,7 +553,15 @@ class NautobotAdapter(DiffSync):
     def load_cables(self):
         """Add Nautobot Cable objects as DiffSync Connection models."""
         for _cable in Cable.objects.all():
+            if _cable.termination_a.device.name not in self.cable_map:
+                self.cable_map[_cable.termination_a.device.name] = {}
+            if _cable.termination_a.name not in self.cable_map[_cable.termination_a.device.name]:
+                self.cable_map[_cable.termination_a.device.name][_cable.termination_a.name] = {}
             self.cable_map[_cable.termination_a.device.name][_cable.termination_a.name] = _cable.id
+            if _cable.termination_b.device.name not in self.cable_map:
+                self.cable_map[_cable.termination_b.device.name] = {}
+            if _cable.termination_b.name not in self.cable_map[_cable.termination_b.device.name]:
+                self.cable_map[_cable.termination_b.device.name][_cable.termination_b.name] = {}
             self.cable_map[_cable.termination_b.device.name][_cable.termination_b.name] = _cable.id
             new_conn = self.conn(
                 src_device="",
