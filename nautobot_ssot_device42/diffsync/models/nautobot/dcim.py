@@ -612,15 +612,20 @@ class NautobotDevice(Device):
                         message=f"Unable to find rack {attrs['rack']} in {attrs['room']} {err}"
                     )
         if attrs.get("hardware"):
-            _dt = OrmDeviceType.objects.get(model=attrs["hardware"])
-            _dev.device_type = _dt
+            for new_dt in self.diffsync.objects_to_create["devicetypes"]:
+                if new_dt.model == attrs["hardware"]:
+                    new_dt.validated_save()
+                    self.diffsync.objects_to_create["devicetypes"].pop(new_dt)
+            _dev.device_type_id = self.diffsync.devicetype_map[slugify(attrs["hardware"])]
         if attrs.get("os"):
             if attrs.get("hardware"):
-                _hardware = OrmDeviceType.objects.get(model=attrs["hardware"])
+                _hardware = self.diffsync.get(NautobotHardware, attrs["hardware"])
             else:
-                _hardware = _dev.device_type
-            _dev.platform = nautobot.verify_platform(
-                diffsync=self.diffsync, platform_name=attrs["os"], manu=_hardware.manufacturer.id
+                _hardware = self.diffsync.get(NautobotHardware, self.hardware)
+            _dev.platform_id = nautobot.verify_platform(
+                diffsync=self.diffsync,
+                platform_name=attrs["os"],
+                manu=self.diffsync.vendor_map[slugify(_hardware.manufacturer)],
             )
         if attrs.get("os_version"):
             if attrs.get("os"):
