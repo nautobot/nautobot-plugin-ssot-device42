@@ -491,14 +491,14 @@ class NautobotDevice(Device):
     """Nautobot Device model."""
 
     @staticmethod
-    def _get_site(diffsync, ids, attrs):
+    def _get_site(diffsync, building: str):
         """Get Site ID from Building name."""
         try:
-            _site = diffsync.site_map[slugify(attrs["building"])]
+            _site = diffsync.site_map[slugify(building)]
             return _site
         except KeyError:
             if diffsync.job.kwargs.get("debug"):
-                diffsync.job.log_debug(message=f"Unable to find Site {attrs['building']}.")
+                diffsync.job.log_debug(message=f"Unable to find Site {building}.")
         return None
 
     @classmethod
@@ -522,7 +522,7 @@ class NautobotDevice(Device):
             if diffsync.job.kwargs.get("debug"):
                 diffsync.job.log_debug(message=f"Unable to find DeviceType {attrs['hardware']} - {_dt}.")
             return None
-        _site = cls._get_site(diffsync, ids, attrs)
+        _site = cls._get_site(diffsync, building=attrs["building"])
         if not _site:
             diffsync.job.log_debug(message=f"Can't create {ids['name']} as unable to determine Site.")
             return None
