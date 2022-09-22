@@ -106,7 +106,7 @@ class NautobotPatchPanel(PatchPanel):
         if attrs.get("building"):
             pp_site = find_site(diffsync=self.diffsync, attrs=attrs)
             if pp_site:
-                ppanel.site = pp_site
+                ppanel.site_id = pp_site
         if attrs.get("room") or attrs.get("rack"):
             if attrs.get("building"):
                 _building = attrs["building"]
@@ -122,7 +122,7 @@ class NautobotPatchPanel(PatchPanel):
                 _rack = self.rack
             pp_rack = self.find_rack(diffsync=self.diffsync, building=_building, room=_room, rack=_rack)
             if pp_rack:
-                ppanel.rack = pp_rack
+                ppanel.rack_id = pp_rack
                 ppanel.face = attrs["orientation"] if attrs.get("orientation") else self.orientation
         if attrs.get("serial_no"):
             ppanel.serial = attrs["serial_no"]
