@@ -30,7 +30,6 @@ class Room(DiffSyncModel):
 
     _modelname = "room"
     _identifiers = ("name", "building")
-    _shortname = ("name",)
     _attributes = ("notes", "custom_fields")
     _children = {"rack": "racks"}
     name: str
@@ -46,7 +45,6 @@ class Rack(DiffSyncModel):
 
     _modelname = "rack"
     _identifiers = ("name", "building", "room")
-    _shortname = ("name",)
     _attributes = ("height", "numbering_start_from_bottom", "tags", "custom_fields")
     _children = {}
     name: str
@@ -149,7 +147,6 @@ class Port(DiffSyncModel):
 
     _modelname = "port"
     _identifiers = ("device", "name")
-    _shortname = ("name",)
     _attributes = ("enabled", "mtu", "description", "mac_addr", "type", "mode", "tags", "vlans", "custom_fields")
     _children = {}
     name: str
