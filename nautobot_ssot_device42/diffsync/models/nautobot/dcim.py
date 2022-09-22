@@ -641,7 +641,7 @@ class NautobotDevice(Device):
                     diffsync=self.diffsync,
                     os=_os,
                     version=attrs["os_version"],
-                    manufacturer=self.devicetype.manufacturer.id,
+                    manufacturer=_dev.device_type.manufacturer.id,
                 )
                 self._assign_version_to_device(diffsync=self.diffsync, device=self.uuid, software_lcm=soft_lcm)
             else:
