@@ -51,13 +51,13 @@ def verify_device_role(diffsync, role_name: str, role_color: str = None) -> UUID
     return role_obj
 
 
-def verify_platform(diffsync, platform_name: str, manu: str) -> UUID:
+def verify_platform(diffsync, platform_name: str, manu: UUID) -> UUID:
     """Verifies Platform object exists in Nautobot. If not, creates it.
 
     Args:
         diffsync (obj): DiffSync Job with maps.
         platform_name (str): Name of platform to verify.
-        manu (str): Name of platform manufacturer.
+        manu (UUID): The ID (primary key) of platform manufacturer.
 
     Returns:
         UUID: UUID for found or created DeviceRole object.
