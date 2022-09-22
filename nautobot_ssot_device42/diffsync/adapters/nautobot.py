@@ -752,6 +752,10 @@ class NautobotAdapter(DiffSync):
         self.platform_map = {p.slug: p.id for p in Platform.objects.only("id", "slug")}
         self.devicerole_map = {dr.slug: dr.id for dr in DeviceRole.objects.only("id", "slug")}
         self.relationship_map = {r.name: r.id for r in Relationship.objects.only("id", "name")}
+        self.softwarelcm_map = {
+            s.device_platform.slug: {s.version: s.id}
+            for s in SoftwareLCM.objects.only("id", "version", "device_platform")
+        }
 
         # Import all Nautobot Site records as Buildings
         self.load_sites()
