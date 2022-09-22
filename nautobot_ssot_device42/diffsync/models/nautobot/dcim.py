@@ -594,7 +594,17 @@ class NautobotDevice(Device):
         if self.diffsync.job.kwargs.get("debug"):
             self.diffsync.log_debug(message=f"Updating Device {self.name} in {_dev.site} with {attrs}")
         if attrs.get("building"):
-            _dev.site = self._get_site(diffsync=self.diffsync, ids=self.get_identifiers(), attrs=attrs)
+            site_id = None
+            try:
+                site_id = OrmSite.objects.get(name=attrs["building"])
+            except OrmSite.DoesNotExist:
+                for site in self.diffsync.objects_to_create["sites"]:
+                    if site.slug == attrs["building"]:
+                        site.validated_save()
+                        self.diffsync.objects_to_create["sites"].remove(site)
+                        site_id = self._get_site(diffsync=self.diffsync, building=attrs["building"])
+            if site_id:
+                _dev.site_id = site_id
         if attrs.get("rack") and attrs.get("room"):
             try:
                 _dev.site = self._get_site(diffsync=self.diffsync, ids=self.get_identifiers(), attrs=attrs)
