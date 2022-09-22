@@ -591,6 +591,8 @@ class NautobotDevice(Device):
     def update(self, attrs):
         """Update Device object in Nautobot."""
         _dev = OrmDevice.objects.get(id=self.uuid)
+        if self.diffsync.job.kwargs.get("debug"):
+            self.diffsync.log_debug(message=f"Updating Device {self.name} in {_dev.site} with {attrs}")
         if attrs.get("building"):
             _dev.site = self._get_site(diffsync=self.diffsync, ids=self.get_identifiers(), attrs=attrs)
         if attrs.get("rack") and attrs.get("room"):
