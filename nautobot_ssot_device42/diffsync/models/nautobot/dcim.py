@@ -924,6 +924,7 @@ class NautobotConnection(Connection):
     def create(cls, diffsync, ids, attrs):  # pylint: disable=inconsistent-return-statements
         """Create Cable object in Nautobot."""
         # Handle Circuit Terminations
+        new_cable = None
         if attrs["src_type"] == "circuit" or attrs["dst_type"] == "circuit":
             new_cable = cls.get_circuit_connections(cls, diffsync=diffsync, ids=ids, attrs=attrs)
         elif attrs["src_type"] == "interface" and attrs["dst_type"] == "interface":
@@ -954,7 +955,7 @@ class NautobotConnection(Connection):
         _intf, circuit = None, None
         if attrs["src_type"] == "interface":
             try:
-                _intf = diffsync.port_map[ids["src_device"]][ids["src_port"]]
+                _intf = diffsync.cable_map[ids["src_device"]][ids["src_port"]]
                 circuit = diffsync.circuit_map[ids["dst_device"]]
             except KeyError:
                 if diffsync.job.kwargs.get("debug"):
@@ -975,7 +976,7 @@ class NautobotConnection(Connection):
         if attrs["dst_type"] == "interface":
             try:
                 circuit = diffsync.circuit_map[ids["src_device"]]
-                _intf = diffsync.port_map[ids["dst_device"]][ids["dst_port"]]
+                _intf = diffsync.cable_map[ids["dst_device"]][ids["dst_port"]]
             except KeyError:
                 if diffsync.job.kwargs.get("debug"):
                     diffsync.job.log_warning(
@@ -1042,7 +1043,7 @@ class NautobotConnection(Connection):
         """
         _src_port, _dst_port = None, None
         try:
-            _src_port = diffsync.port_map[ids["src_device"]][ids["src_port"]]
+            _src_port = diffsync.cable_map[ids["src_device"]][ids["src_port"]]
         except KeyError:
             if diffsync.job.kwargs.get("debug"):
                 diffsync.job.log_warning(
