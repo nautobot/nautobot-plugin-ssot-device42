@@ -505,6 +505,8 @@ class Device42Adapter(DiffSync):
                 else:
                     _device_name = _port["device_name"]
                 try:
+                    new_port = self.get(self.port, {"device": _device_name, "name": _port["port_name"][:63].strip()})
+                except ObjectNotFound:
                     new_port = self.port(
                         name=_port["port_name"][:63].strip(),
                         device=_device_name,
@@ -547,10 +549,6 @@ class Device42Adapter(DiffSync):
                         if self.job.kwargs.get("debug"):
                             self.job.log_warning(message=f"Device {_port['device_name']} not found. {err}")
                         continue
-                except ObjectAlreadyExists as err:
-                    if self.job.kwargs.get("debug"):
-                        self.job.log_warning(message=f"Port already exists. {err}")
-                    continue
 
     def filter_ports(self, vlan_ports: List[dict], no_vlan_ports: List[dict]) -> List[dict]:
         """Method to combine lists of ports while removing duplicates.

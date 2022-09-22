@@ -3,7 +3,7 @@
 from collections import defaultdict
 import ipaddress
 from diffsync import DiffSync
-from diffsync.exceptions import ObjectAlreadyExists
+from diffsync.exceptions import ObjectAlreadyExists, ObjectNotFound
 from django.db.models import ProtectedError
 
 from nautobot.circuits.models import Circuit, CircuitTermination, Provider
@@ -414,51 +414,49 @@ class NautobotAdapter(DiffSync):
             if port.name not in self.port_map[port.device.name]:
                 self.port_map[port.device.name][port.name] = {}
             self.port_map[port.device.name][port.name] = port.id
-            if self.job.kwargs.get("debug"):
-                self.job.log_debug(message=f"Loading Interface: {port.name} for {port.device}.")
             if port.mac_address:
                 _mac_addr = str(port.mac_address).replace(":", "").lower()
             else:
                 _mac_addr = ""
-            _port = self.port(
-                name=port.name,
-                device=port.device.name,
-                enabled=port.enabled,
-                mtu=port.mtu,
-                description=port.description,
-                mac_addr=_mac_addr[:13],
-                type=port.type,
-                tags=nautobot.get_tag_strings(port.tags),
-                mode=port.mode,
-                custom_fields=nautobot.get_custom_field_dicts(port.get_custom_fields()),
-                uuid=port.id,
-            )
-            if port.mode == "access" and port.untagged_vlan:
-                _port.vlans = [
-                    {
-                        "vlan_name": port.untagged_vlan.name,
-                        "vlan_id": str(port.untagged_vlan.vid),
-                    }
-                ]
-            else:
-                _tags = []
-                for _vlan in port.tagged_vlans.values():
-                    _tags.append(
-                        {
-                            "vlan_name": _vlan["name"],
-                            "vlan_id": str(_vlan["vid"]),
-                        }
-                    )
-                _vlans = sorted(_tags, key=lambda k: k["vlan_id"])
-                _port.vlans = _vlans
             try:
+                _port = self.get(self.port, {"device": port.device.name, "name": port.name})
+            except ObjectNotFound:
+                if self.job.kwargs.get("debug"):
+                    self.job.log_debug(message=f"Loading Interface: {port.name} for {port.device}.")
+                _port = self.port(
+                    name=port.name,
+                    device=port.device.name,
+                    enabled=port.enabled,
+                    mtu=port.mtu,
+                    description=port.description,
+                    mac_addr=_mac_addr[:13],
+                    type=port.type,
+                    tags=nautobot.get_tag_strings(port.tags),
+                    mode=port.mode,
+                    custom_fields=nautobot.get_custom_field_dicts(port.get_custom_fields()),
+                    uuid=port.id,
+                )
+                if port.mode == "access" and port.untagged_vlan:
+                    _port.vlans = [
+                        {
+                            "vlan_name": port.untagged_vlan.name,
+                            "vlan_id": str(port.untagged_vlan.vid),
+                        }
+                    ]
+                else:
+                    _tags = []
+                    for _vlan in port.tagged_vlans.values():
+                        _tags.append(
+                            {
+                                "vlan_name": _vlan["name"],
+                                "vlan_id": str(_vlan["vid"]),
+                            }
+                        )
+                    _vlans = sorted(_tags, key=lambda k: k["vlan_id"])
+                    _port.vlans = _vlans
                 self.add(_port)
                 _dev = self.get(self.device, port.device.name)
                 _dev.add_child(_port)
-            except ObjectAlreadyExists as err:
-                if self.job.kwargs.get("debug"):
-                    self.job.log_warning(message=f"Port already exists for {port.device_name}. {err}")
-                continue
 
     def load_vrfs(self):
         """Add Nautobot VRF objects as DiffSync VRFGroup models."""
