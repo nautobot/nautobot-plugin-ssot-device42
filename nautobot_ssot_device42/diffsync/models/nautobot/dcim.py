@@ -626,7 +626,7 @@ class NautobotDevice(Device):
             for new_dt in self.diffsync.objects_to_create["devicetypes"]:
                 if new_dt.model == attrs["hardware"]:
                     new_dt.validated_save()
-                    self.diffsync.objects_to_create["devicetypes"].pop(new_dt)
+                    self.diffsync.objects_to_create["devicetypes"].remove(new_dt)
             _dev.device_type_id = self.diffsync.devicetype_map[slugify(attrs["hardware"])]
         if attrs.get("os"):
             if attrs.get("hardware"):
