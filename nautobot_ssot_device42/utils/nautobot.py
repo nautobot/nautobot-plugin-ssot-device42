@@ -250,3 +250,36 @@ def determine_vc_position(vc_map: dict, virtual_chassis: str, device_name: str) 
         int: Position for member device in Virtual Chassis. Will always be position 2 or higher as 1 is master device.
     """
     return sorted(vc_map[virtual_chassis]["members"]).index(device_name) + 2
+
+
+def get_dlc_version_map():
+    """Method to create nested dictionary of Software versions mapped to their ID along with Platform.
+
+    This should only be used if the Device Lifecycle plugin is found to be installed.
+
+    Returns:
+        dict: Nested dictionary of versions mapped to their ID and to their Platform.
+    """
+    version_map = {}
+    for ver in SoftwareLCM.objects.only("id", "device_platform", "version"):
+        if ver.device_platform.slug not in version_map:
+            version_map[ver.device_platform.slug] = {}
+        version_map[ver.device_platform.slug][ver.version] = ver.id
+    return version_map
+
+
+def get_cf_version_map():
+    """Method to create nested dictionary of Software versions mapped to their ID along with Platform.
+
+    This should only be used if the Device Lifecycle plugin is not found. It will instead use custom field "OS Version".
+
+    Returns:
+        dict: Nested dictionary of versions mapped to their ID and to their Platform.
+    """
+    version_map = {}
+    for dev in Device.objects.only("id", "platform", "_custom_field_data"):
+        if dev.platform.slug not in version_map:
+            version_map[dev.platform.slug] = {}
+        if "os-version" in dev.custom_field_data:
+            version_map[dev.platform.slug][dev.custom_field_data["os-version"]] = dev.id
+    return version_map
